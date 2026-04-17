@@ -698,11 +698,33 @@ textarea.fctl{resize:vertical;min-height:65px;}
           <div class="pb" id="att-today-list"><div style="text-align:center;color:var(--text3);padding:2rem">Loading...</div></div>
         </div>
         <div class="panel">
-        <div class="ph" style="display:flex;align-items:center;justify-content:space-between">
-  <h3>Attendance History</h3>
-  <button class="btn btn-primary" onclick="exportAttendanceExcel()" style="font-size:12px;padding:6px 14px">📊 Export Excel</button>
-</div>
-          <div class="pb" id="att-history-list"><div style="text-align:center;color:var(--text3);padding:2rem">Please apply a date filter above to view history</div></div>
+          <div class="ph" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+            <div>
+              <h3 id="att-history-title">Attendance History</h3>
+              <div style="font-size:12px;color:var(--text3);margin-top:2px" id="att-history-subtitle">Select a date range above and click Filter</div>
+            </div>
+            <button class="btn btn-primary" onclick="exportAttendanceExcel()" style="font-size:12px;padding:6px 14px">📊 Export Excel</button>
+          </div>
+          <!-- History summary stats -->
+          <div id="att-history-stats" style="display:none;display:none;gap:12px;flex-wrap:wrap;margin:12px 0">
+            <div style="background:var(--green-bg);border-radius:8px;padding:8px 16px;text-align:center">
+              <div style="font-size:11px;color:var(--text3)">Total Present</div>
+              <div style="font-size:20px;font-weight:700;color:var(--green)" id="hist-present">0</div>
+            </div>
+            <div style="background:var(--red-bg);border-radius:8px;padding:8px 16px;text-align:center">
+              <div style="font-size:11px;color:var(--text3)">Total Absent</div>
+              <div style="font-size:20px;font-weight:700;color:var(--red)" id="hist-absent">0</div>
+            </div>
+            <div style="background:var(--blue-bg);border-radius:8px;padding:8px 16px;text-align:center">
+              <div style="font-size:11px;color:var(--text3)">Total Hours Worked</div>
+              <div style="font-size:20px;font-weight:700;color:var(--blue)" id="hist-hours">0h</div>
+            </div>
+            <div style="background:var(--amber-bg);border-radius:8px;padding:8px 16px;text-align:center">
+              <div style="font-size:11px;color:var(--text3)">Avg Hours/Day</div>
+              <div style="font-size:20px;font-weight:700;color:var(--amber)" id="hist-avg">0h</div>
+            </div>
+          </div>
+          <div class="pb" id="att-history-list"><div style="text-align:center;color:var(--text3);padding:2rem">Select a date range above and click Filter to view history</div></div>
         </div>
       </div>
 <!-- CHAT -->
@@ -2340,50 +2362,67 @@ async function loadAttendance(){
     }
   }).catch(function(){});
 
-  // History section
+  // History section — always load from Supabase for selected range
   if(from||to){
-    try{
-      const histRes=await AttendanceAPI.getAll(from,to,null);
-      if(histRes&&histRes.success){
-        const records=histRes.attendance;
-        document.getElementById('att-history-list').innerHTML=records.length?records.map(r=>{
-          const loginTime=r.login_time?new Date(r.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—';
-          const logoutTime=r.logout_time?new Date(r.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'Active';
-          const hours=parseFloat(r.total_hours||0).toFixed(1);
-          const memberName=r.members?.name||r.member_id||'—';
-          const memberColor=r.members?.color||'#666';
-          const date=new Date(r.date+'T12:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
-          return`<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">
-            <div class="oavatar" style="background:${memberColor};width:32px;height:32px;font-size:12px;flex-shrink:0">${initials(memberName)}</div>
-            <div style="flex:1"><div style="font-size:13px;font-weight:500">${memberName}</div><div style="font-size:11px;color:var(--text3)">${date}</div></div>
-            <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--text3)">Login</div><div style="font-size:12px">${loginTime}</div></div>
-            <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--text3)">Logout</div><div style="font-size:12px">${logoutTime}</div></div>
-            <div style="text-align:center;min-width:55px"><div style="font-size:11px;color:var(--text3)">Hours</div><div style="font-size:14px;font-weight:700;color:${parseFloat(hours)>6?'var(--green)':parseFloat(hours)>3?'var(--amber)':'var(--text2)'}">${hours}h</div></div>
-            <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;${r.status==='present'?'background:var(--green-bg);color:var(--green)':'background:var(--red-bg);color:var(--red)'}">${r.status==='present'?'✅ Present':'❌ Absent'}</span>
-          </div>`;
-        }).join(''):'<div style="text-align:center;color:var(--text3);padding:2rem">No records found for selected range</div>';
+    const histFrom=from||today;
+    const histTo=to||today;
+    const fromFmt=new Date(histFrom+'T12:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+    const toFmt=new Date(histTo+'T12:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+    const periodLabel=histFrom===histTo?fromFmt:fromFmt+' — '+toFmt;
+    document.getElementById('att-history-title').textContent='Attendance History';
+    document.getElementById('att-history-subtitle').textContent='Period: '+periodLabel;
+    document.getElementById('att-history-list').innerHTML='<div style="text-align:center;color:var(--text3);padding:2rem">Loading...</div>';
+
+    _loadAttHistoryFromSupa(histFrom,histTo).then(function(rows){
+      const histList=document.getElementById('att-history-list');
+      const statsEl=document.getElementById('att-history-stats');
+      if(!rows||!rows.length){
+        histList.innerHTML='<div style="text-align:center;color:var(--text3);padding:2rem">No attendance records found for this period</div>';
+        if(statsEl)statsEl.style.display='none';
+        return;
       }
-    }catch(e){
-      // Try Supabase history
-      _loadAttHistoryFromSupa(from,to).then(function(rows){
-        if(!rows||!rows.length)return;
-        document.getElementById('att-history-list').innerHTML=rows.map(function(r){
-          var m=db.members.find(function(m){return m.id===r.member_id;})||{name:r.member_id,color:'#666'};
-          var loginTime=r.login_time?new Date(r.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—';
-          var logoutTime=r.logout_time?new Date(r.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'Active';
-          var hours=parseFloat(r.total_hours||0).toFixed(1);
-          var date=new Date(r.date+'T12:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
-          return`<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">
-            <div class="oavatar" style="background:${m.color||'#666'};width:32px;height:32px;font-size:12px;flex-shrink:0">${initials(m.name)}</div>
-            <div style="flex:1"><div style="font-size:13px;font-weight:500">${m.name}</div><div style="font-size:11px;color:var(--text3)">${date}</div></div>
-            <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--text3)">Login</div><div style="font-size:12px">${loginTime}</div></div>
-            <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--text3)">Logout</div><div style="font-size:12px">${logoutTime}</div></div>
-            <div style="text-align:center;min-width:55px"><div style="font-size:11px;color:var(--text3)">Hours</div><div style="font-size:14px;font-weight:700;color:${parseFloat(hours)>6?'var(--green)':parseFloat(hours)>3?'var(--amber)':'var(--text2)'}">${hours}h</div></div>
-            <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;${r.status==='present'?'background:var(--green-bg);color:var(--green)':'background:var(--red-bg);color:var(--red)'}">${r.status==='present'?'✅ Present':'❌ Absent'}</span>
-          </div>`;
-        }).join('');
-      }).catch(function(){});
-    }
+      // Compute stats
+      const totalPresent=rows.filter(function(r){return r.status==='present';}).length;
+      const totalAbsent=rows.filter(function(r){return r.status!=='present';}).length;
+      const totalHrs=rows.reduce(function(s,r){return s+parseFloat(r.total_hours||0);},0);
+      const uniqueDays=[...new Set(rows.map(function(r){return r.date;}))].length;
+      const avgHrs=uniqueDays>0?(totalHrs/uniqueDays).toFixed(1):0;
+
+      if(statsEl){
+        statsEl.style.display='flex';
+        document.getElementById('hist-present').textContent=totalPresent;
+        document.getElementById('hist-absent').textContent=totalAbsent;
+        document.getElementById('hist-hours').textContent=Math.floor(totalHrs)+'h '+Math.round((totalHrs%1)*60)+'m';
+        document.getElementById('hist-avg').textContent=avgHrs+'h';
+      }
+
+      // Render rows
+      histList.innerHTML=rows.map(function(r){
+        const member=db.members.find(function(m){return m.id===r.member_id||(r.member_name&&m.name&&m.name.toLowerCase()===r.member_name.toLowerCase());})||{name:r.member_name||'—',color:'#666',role:'—'};
+        const loginT=r.login_time?new Date(r.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
+        const logoutT=r.logout_time?new Date(r.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'<span style="color:var(--green);font-weight:600">Active</span>';
+        const hrs=parseFloat(r.total_hours||0);
+        const hStr=Math.floor(hrs)+'h '+Math.round((hrs%1)*60)+'m';
+        const hColor=hrs>6?'var(--green)':hrs>3?'var(--amber)':'var(--text2)';
+        const date=new Date(r.date+'T12:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+        const isPresent=r.status==='present';
+        return`<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">
+          <div class="oavatar" style="background:${member.color||'#666'};width:36px;height:36px;font-size:13px;flex-shrink:0">${initials(member.name)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:500">${member.name}</div>
+            <div style="font-size:11px;color:var(--text3)">${member.role||'—'} &nbsp;·&nbsp; ${date}</div>
+          </div>
+          <div style="text-align:center;min-width:70px"><div style="font-size:11px;color:var(--text3)">Login</div><div style="font-size:13px;font-weight:500">${loginT}</div></div>
+          <div style="text-align:center;min-width:70px"><div style="font-size:11px;color:var(--text3)">Logout</div><div style="font-size:13px;font-weight:500">${logoutT}</div></div>
+          <div style="text-align:center;min-width:65px"><div style="font-size:11px;color:var(--text3)">Hours</div><div style="font-size:14px;font-weight:700;color:${hColor}">${hStr}</div></div>
+          <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;${isPresent?'background:var(--green-bg);color:var(--green)':'background:var(--red-bg);color:var(--red)'}">
+            ${isPresent?'✅ Present':'❌ Absent'}
+          </span>
+        </div>`;
+      }).join('');
+    }).catch(function(){
+      document.getElementById('att-history-list').innerHTML='<div style="text-align:center;color:var(--red);padding:2rem">Failed to load history. Check your connection.</div>';
+    });
   }
 }
 
