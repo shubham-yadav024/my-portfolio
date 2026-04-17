@@ -2453,8 +2453,8 @@ async function _attPanelRefreshTick(){
   var res=await supa.from('attendance').select('*').eq('date',today);
   if(!res||!res.data||!res.data.length)return;
   var supaData=res.data;
-  // Merge with members list
-  var merged=db.members.map(function(m){
+  // Merge with members list (exclude admins/reviewers)
+  var merged=db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer';}).map(function(m){
     var rec=supaData.find(function(r){return r.member_id===m.id||(r.member_name&&m.name&&r.member_name.toLowerCase()===m.name.toLowerCase());});
     if(!rec)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:'0.0'};
     var hours=rec.total_hours||0;
