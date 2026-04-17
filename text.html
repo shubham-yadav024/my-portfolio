@@ -2156,26 +2156,97 @@ function renderChatMessages(){
   container.scrollTop=container.scrollHeight;
 }
 // sendChatMessage is defined in file-sharing script block above
-  function exportAttendanceExcel(){
-  const rows=[['Name','Role','Date','Login','Logout','Hours','Status']];
-  const summaryItems=document.querySelectorAll('#att-today-list > div');
-  const today=new Date().toLocaleDateString('en-IN');
-  summaryItems.forEach(item=>{
-    const name=item.querySelector('div > div:first-child')?.textContent||'';
-    const role=item.querySelector('div > div:last-child')?.textContent||'';
-    const cols=item.querySelectorAll('div[style*="min-width"]');
-    const login=cols[0]?.querySelector('div:last-child')?.textContent||'—';
-    const logout=cols[1]?.querySelector('div:last-child')?.textContent||'—';
-    const hours=cols[2]?.querySelector('div:last-child')?.textContent||'0h';
-    const status=item.querySelector('span')?.textContent||'Absent';
-    rows.push([name,role,today,login,logout,hours,status]);
+async function exportAttendanceExcel(){
+  const today=new Date().toISOString().slice(0,10);
+  const from=document.getElementById('att-from')?.value||today;
+  const to=document.getElementById('att-to')?.value||today;
+  const exportedOn=new Date().toLocaleString('en-IN',{timeZone:'Asia/Kolkata',dateStyle:'long',timeStyle:'short'});
+  const fromFmt=new Date(from+'T12:00').toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
+  const toFmt=new Date(to+'T12:00').toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
+  const isSingleDay=from===to;
+  const periodLabel=isSingleDay?fromFmt:fromFmt+' to '+toFmt;
+
+  // Fetch Supabase data for the date range
+  const supa=await _getAttSupa();
+  let supaRows=[];
+  if(supa){
+    try{
+      const res=await supa.from('attendance').select('*').gte('date',from).lte('date',to).order('date',{ascending:true}).order('login_time',{ascending:true});
+      if(res&&res.data)supaRows=res.data;
+    }catch(e){}
+  }
+
+  // Build rows from Supabase data merged with members
+  const dataRows=[];
+  if(supaRows.length>0){
+    supaRows.forEach(function(r){
+      const member=db.members.find(function(m){
+        return m.id===r.member_id||(r.member_name&&m.name&&m.name.toLowerCase()===r.member_name.toLowerCase());
+      })||{name:r.member_name||r.member_id||'—',role:'—'};
+      const date=new Date(r.date+'T12:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+      const loginT=r.login_time?new Date(r.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
+      const logoutT=r.logout_time?new Date(r.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'Active';
+      const hrs=parseFloat(r.total_hours||0);
+      const hDisplay=Math.floor(hrs)+'h '+(Math.round((hrs%1)*60))+'m';
+      const status=r.status==='present'?'Present':'Absent';
+      dataRows.push([member.name,member.role||'—',date,loginT,logoutT,hDisplay,status]);
+    });
+  }else{
+    // Fallback: use today's panel data from DOM
+    document.querySelectorAll('.att-row').forEach(function(row){
+      const name=row.querySelector('div[style*="font-size:14px"]')?.textContent?.replace('(You)','').trim()||'—';
+      const role=row.querySelector('div[style*="font-size:12px"]')?.textContent||'—';
+      const loginT=row.querySelector('.att-login')?.textContent||'—';
+      const logoutT=row.querySelector('.att-logout')?.textContent||'—';
+      const hoursT=row.querySelector('.att-hours')?.textContent||'0h';
+      const statusT=row.querySelector('.att-badge')?.textContent?.trim().replace(/[^\w\s]/g,'')||'Absent';
+      dataRows.push([name,role,fromFmt,loginT,logoutT,hoursT,statusT.trim()]);
+    });
+  }
+
+  // Calculate summary stats
+  const totalPresent=dataRows.filter(r=>r[6]==='Present').length;
+  const totalAbsent=dataRows.filter(r=>r[6]==='Absent').length;
+  const totalHoursAll=supaRows.reduce(function(s,r){return s+parseFloat(r.total_hours||0);},0);
+
+  // Build professional CSV
+  const Q=function(v){return'"'+String(v||'').replace(/"/g,'""')+'"';};
+  const lines=[];
+
+  // Company header
+  lines.push(Q('PUSHP CONSTRUCTION & INTERIOR'));
+  lines.push(Q('B-26, EBD, L.B.S. Marg, Bhandup (W), Mumbai 400 078'));
+  lines.push(Q('GSTN: 27ARCPB6945J2ZN | pushp.ci@gmail.com'));
+  lines.push('');
+  lines.push(Q('ATTENDANCE REPORT'));
+  lines.push(Q('Period: '+periodLabel));
+  lines.push(Q('Exported On: '+exportedOn));
+  lines.push('');
+
+  // Summary
+  lines.push([Q('Total Present'),Q(totalPresent),Q('Total Absent'),Q(totalAbsent),Q('Total Hours'),Q(Math.floor(totalHoursAll)+'h '+Math.round((totalHoursAll%1)*60)+'m')].join(','));
+  lines.push('');
+
+  // Column headers
+  lines.push([Q('S.No.'),Q('Employee Name'),Q('Role / Designation'),Q('Date'),Q('Login Time'),Q('Logout Time'),Q('Total Hours'),Q('Status')].join(','));
+
+  // Data rows
+  dataRows.forEach(function(r,i){
+    lines.push([Q(i+1),Q(r[0]),Q(r[1]),Q(r[2]),Q(r[3]),Q(r[4]),Q(r[5]),Q(r[6])].join(','));
   });
-  let csv=rows.map(r=>r.map(c=>'"'+c+'"').join(',')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv'});
+
+  lines.push('');
+  lines.push(Q('--- End of Report ---'));
+
+  const csv=lines.join('\r\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  a.href=url;a.download='attendance_'+today.replace(/\//g,'-')+'.csv';
-  a.click();URL.revokeObjectURL(url);
+  a.href=url;
+  a.download='PushpCI_Attendance_'+from+(from!==to?'_to_'+to:'')+'.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Attendance report exported!','success');
 }
 async function loadAttendance(){
   const from=document.getElementById('att-from')?.value;
