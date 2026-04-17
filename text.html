@@ -2020,8 +2020,10 @@ async function _attSyncToSupa(memberId,today,loginTime){
       localStorage.setItem('att_supa_id',ex.data.id);
       return;
     }
+    var memberName=(currentUser&&(currentUser.name||currentUser.username))||'';
     var res=await supa.from('attendance').insert({
       member_id:memberId,
+      member_name:memberName,
       date:today,
       login_time:loginTime,
       status:'present'
@@ -2259,7 +2261,7 @@ async function loadAttendance(){
   _loadAttFromSupa(today).then(function(supaData){
     if(supaData&&supaData.length>0){
       var merged=db.members.map(function(m){
-        var rec=supaData.find(function(r){return r.member_id===m.id;});
+        var rec=supaData.find(function(r){return r.member_id===m.id||(r.member_name&&m.name&&r.member_name.toLowerCase()===m.name.toLowerCase());});
         if(!rec)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:0};
         var hours=rec.total_hours||0;
         if(!rec.logout_time&&rec.login_time){
@@ -2338,7 +2340,7 @@ async function _attPanelRefreshTick(){
   var supaData=res.data;
   // Merge with members list
   var merged=db.members.map(function(m){
-    var rec=supaData.find(function(r){return r.member_id===m.id;});
+    var rec=supaData.find(function(r){return r.member_id===m.id||(r.member_name&&m.name&&r.member_name.toLowerCase()===m.name.toLowerCase());});
     if(!rec)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:'0.0'};
     var hours=rec.total_hours||0;
     if(!rec.logout_time&&rec.login_time){
