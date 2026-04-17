@@ -1956,8 +1956,16 @@ async function _getAttSupa(){
 }
 
 async function attendanceLogin(memberId){
-  // Fall back to currentUser.id if memberId is not set
-  var id=memberId||(currentUser&&currentUser.id);
+  // Resolve member ID: use passed memberId, else currentUser.memberId,
+  // else find member by name match, else fall back to currentUser.id
+  var id=memberId||(currentUser&&currentUser.memberId);
+  if(!id&&currentUser){
+    var matched=db.members.find(function(m){
+      return m.name&&currentUser.name&&m.name.toLowerCase()===currentUser.name.toLowerCase();
+    });
+    if(matched)id=matched.id;
+  }
+  if(!id)id=(currentUser&&currentUser.id);
   if(!id)return;
 
   var today=new Date().toISOString().slice(0,10);
@@ -2019,7 +2027,8 @@ async function _attSyncToSupa(memberId,today,loginTime){
       status:'present'
     }).select('id').single();
     if(res&&res.data)localStorage.setItem('att_supa_id',res.data.id);
-  }catch(e){}
+    if(res&&res.error)console.warn('Attendance insert error:',res.error);
+  }catch(e){console.warn('Attendance sync failed:',e);}
 }
 
 async function attendanceLogout(){
