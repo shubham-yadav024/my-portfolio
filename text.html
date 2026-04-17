@@ -2285,7 +2285,7 @@ async function loadAttendance(){
 
   // ── Build today's attendance from localStorage + members list ──
   function _buildLocalSummary(){
-    return db.members.map(function(m){
+    return db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer';}).map(function(m){
       var id=m.id;
       var firstLoginKey='att_login_'+id+'_'+today;
       var sessKey='att_sess_'+id+'_'+today;
@@ -2356,12 +2356,13 @@ async function loadAttendance(){
   // Step 3: Try Supabase summary (async, update if successful)
   _loadAttFromSupa(today).then(function(supaData){
     if(supaData&&supaData.length>0){
-      var merged=db.members.map(function(m){
+      var merged=db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer';}).map(function(m){
         var rec=supaData.find(function(r){return r.member_id===m.id||(r.member_name&&m.name&&r.member_name.toLowerCase()===m.name.toLowerCase());});
         if(!rec)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:0};
         var hours=rec.total_hours||0;
-        if(!rec.logout_time&&rec.login_time){
-          hours=Math.max(0,(Date.now()-new Date(rec.login_time))/3600000);
+        var activeSess=rec.session_start||(!rec.logout_time&&rec.login_time?rec.login_time:null);
+        if(!rec.logout_time&&activeSess){
+          hours=(rec.total_hours||0)+Math.max(0,(Date.now()-new Date(activeSess))/3600000);
         }
         return{member:m,today_status:'present',login_time:rec.login_time,logout_time:rec.logout_time,today_hours:parseFloat(hours).toFixed(1)};
       });
@@ -2405,7 +2406,8 @@ async function loadAttendance(){
 
       // Render rows
       histList.innerHTML=rows.map(function(r){
-        const member=db.members.find(function(m){return m.id===r.member_id||(r.member_name&&m.name&&m.name.toLowerCase()===r.member_name.toLowerCase());})||{name:r.member_name||'—',color:'#666',role:'—'};
+        const member=db.members.find(function(m){return m.id===r.member_id||(r.member_name&&m.name&&m.name.toLowerCase()===r.member_name.toLowerCase());});
+        if(!member||member.role==='admin'||member.role==='reviewer')return''; // skip admins
         const loginT=r.login_time?new Date(r.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
         const logoutT=r.logout_time?new Date(r.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'<span style="color:var(--green);font-weight:600">Active</span>';
         const hrs=parseFloat(r.total_hours||0);
