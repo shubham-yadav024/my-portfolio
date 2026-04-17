@@ -1939,9 +1939,10 @@ const AttendanceAPI={
 // ═══════════════════════════════════════════════════════
 var _attSupaClient=null;
 var _attHoursTimer=null;
-var _attLoginTime=null;
-var _attPanelTimer=null;   // auto-refresh timer for the attendance panel
-var _attLastSupaData=null; // cache of last Supabase fetch
+var _attLoginTime=null;       // current session start time
+var _attPrevHours=0;          // accumulated hours from completed sessions today
+var _attPanelTimer=null;
+var _attLastSupaData=null;
 
 async function _getAttSupa(){
   if(_attSupaClient)return _attSupaClient;
@@ -1956,8 +1957,7 @@ async function _getAttSupa(){
 }
 
 async function attendanceLogin(memberId){
-  // Resolve member ID: use passed memberId, else currentUser.memberId,
-  // else find member by name match, else fall back to currentUser.id
+  // Resolve member ID: memberId → currentUser.memberId → name match → currentUser.id
   var id=memberId||(currentUser&&currentUser.memberId);
   if(!id&&currentUser){
     var matched=db.members.find(function(m){
@@ -1969,44 +1969,39 @@ async function attendanceLogin(memberId){
   if(!id)return;
 
   var today=new Date().toISOString().slice(0,10);
-  var lsKey='att_login_'+id+'_'+today;
+  var firstLoginKey='att_login_'+id+'_'+today;   // first login time of day (never deleted)
+  var sessKey='att_sess_'+id+'_'+today;           // current active session start
+  var totalKey='att_total_'+id+'_'+today;         // accumulated hours from completed sessions
 
-  // ── STEP 1: localStorage check (already logged in today?) ──
-  var existing=localStorage.getItem(lsKey);
-  if(existing){
-    _attLoginTime=new Date(existing);
+  // If already in an active session (e.g. page refresh), just restore timer
+  var activeSess=localStorage.getItem(sessKey);
+  if(activeSess){
+    _attLoginTime=new Date(activeSess);
+    _attPrevHours=parseFloat(localStorage.getItem(totalKey)||0);
     localStorage.setItem('att_member_id',id);
-    localStorage.setItem('att_login_time',existing); // ensure hours are correct after browser refresh
-    _startAttTimer();
-    _updateSessionCard();
-    // Refresh attendance panel immediately if it is currently visible
-    if(document.getElementById('view-attendance')&&document.getElementById('view-attendance').style.display!=='none'){
-      setTimeout(loadAttendance,200);
-    }
+    localStorage.setItem('att_login_time',activeSess);
+    _startAttTimer();_updateSessionCard();
+    if(document.getElementById('view-attendance')&&document.getElementById('view-attendance').style.display!=='none')setTimeout(loadAttendance,200);
     return;
   }
 
-  // ── STEP 2: Save to localStorage IMMEDIATELY ──
+  // Start a new session
   var now=new Date().toISOString();
-  localStorage.setItem(lsKey,now);
+  if(!localStorage.getItem(firstLoginKey))localStorage.setItem(firstLoginKey,now); // record first login
+  localStorage.setItem(sessKey,now);
   localStorage.setItem('att_member_id',id);
   localStorage.setItem('att_login_time',now);
+  _attPrevHours=parseFloat(localStorage.getItem(totalKey)||0);
   _attLoginTime=new Date(now);
-  _startAttTimer();
-  _updateSessionCard();
-  // Immediately refresh the attendance panel if it is currently open
-  if(document.getElementById('view-attendance')&&document.getElementById('view-attendance').style.display!=='none'){
-    setTimeout(loadAttendance,100);
-  }
+  _startAttTimer();_updateSessionCard();
+  if(document.getElementById('view-attendance')&&document.getElementById('view-attendance').style.display!=='none')setTimeout(loadAttendance,100);
 
-  // ── STEP 3: Background sync to Supabase ──
-  _attSyncToSupa(id,today,now);
+  // Background: sync to Supabase (insert if no record today, else just store id)
+  _attSyncToSupa(id,today,localStorage.getItem(firstLoginKey));
 
-  // ── STEP 4: Background sync to backend (may be sleeping) ──
+  // Background: sync to backend
   AttendanceAPI.markLogin(id).then(function(res){
-    if(res&&res.success&&res.session_id){
-      localStorage.setItem('att_session_id',res.session_id);
-    }
+    if(res&&res.success&&res.session_id)localStorage.setItem('att_session_id',res.session_id);
   }).catch(function(){});
 }
 
@@ -2035,47 +2030,50 @@ async function _attSyncToSupa(memberId,today,loginTime){
 
 async function attendanceLogout(){
   var memberId=localStorage.getItem('att_member_id');
-  var loginTime=localStorage.getItem('att_login_time');
+  var sessStart=localStorage.getItem('att_login_time');
   if(!memberId)return;
 
   // Stop the live hours timer
   if(_attHoursTimer){clearInterval(_attHoursTimer);_attHoursTimer=null;}
 
   var now=new Date();
-  var hours=loginTime?Math.max(0,(now-new Date(loginTime))/3600000).toFixed(2):0;
-
-  // Sync logout to backend (fire-and-forget)
-  var sessionId=localStorage.getItem('att_session_id');
-  if(sessionId){
-    AttendanceAPI.markLogout(memberId,sessionId).catch(function(){});
-  }
-
-  // Sync logout time and total hours to Supabase
-  var supaId=localStorage.getItem('att_supa_id');
-  if(supaId){
-    _getAttSupa().then(function(supa){
-      if(!supa)return;
-      supa.from('attendance').update({
-        logout_time:now.toISOString(),
-        total_hours:parseFloat(hours)
-      }).eq('id',supaId).then(function(){}).catch(function(){});
-    });
-  }
-
-  // Clear localStorage — removing login key marks member as absent in the panel
   var today=now.toISOString().slice(0,10);
-  localStorage.removeItem('att_login_'+memberId+'_'+today);
-  localStorage.removeItem('att_session_id');
+  var totalKey='att_total_'+memberId+'_'+today;
+  var sessKey='att_sess_'+memberId+'_'+today;
+
+  // Calculate this session's hours and add to running total
+  var sessHours=sessStart?Math.max(0,(now-new Date(sessStart))/3600000):0;
+  var prevHours=parseFloat(localStorage.getItem(totalKey)||0);
+  var newTotal=prevHours+sessHours;
+  localStorage.setItem(totalKey,newTotal.toFixed(4)); // persist accumulated total
+
+  // Remove active session marker (keep att_login_ so day record stays)
+  localStorage.removeItem(sessKey);
   localStorage.removeItem('att_member_id');
   localStorage.removeItem('att_login_time');
-  localStorage.removeItem('att_supa_id');
+
+  // Sync logout to backend
+  var sessionId=localStorage.getItem('att_session_id');
+  if(sessionId)AttendanceAPI.markLogout(memberId,sessionId).catch(function(){});
+  localStorage.removeItem('att_session_id');
+
+  // Sync accumulated total to Supabase
+  var supaId=localStorage.getItem('att_supa_id');
+  _getAttSupa().then(function(supa){
+    if(!supa)return;
+    var update={logout_time:now.toISOString(),total_hours:parseFloat(newTotal.toFixed(2))};
+    if(supaId){
+      supa.from('attendance').update(update).eq('id',supaId).then(function(){}).catch(function(){});
+    }else{
+      // Find by member_id and date
+      supa.from('attendance').update(update).eq('member_id',memberId).eq('date',today).then(function(){}).catch(function(){});
+    }
+  });
+
   _attLoginTime=null;
-  // Immediately hide the session card
+  _attPrevHours=newTotal;
   _updateSessionCard();
-  // Immediately refresh the attendance panel to reflect absent status
-  if(document.getElementById('view-attendance')&&document.getElementById('view-attendance').style.display!=='none'){
-    loadAttendance();
-  }
+  if(document.getElementById('view-attendance')&&document.getElementById('view-attendance').style.display!=='none')loadAttendance();
 }
 
 // ── Live hours timer ──
@@ -2087,10 +2085,10 @@ function _startAttTimer(){
 
 function _updateActiveHoursDisplay(){
   if(!_attLoginTime)return;
-  var ms=Date.now()-_attLoginTime.getTime();
-  var h=Math.floor(ms/3600000);
-  var m=Math.floor((ms%3600000)/60000);
-  var s=Math.floor((ms%60000)/1000);
+  var sessionMs=Date.now()-_attLoginTime.getTime();
+  var totalMs=sessionMs+(_attPrevHours*3600000);
+  var h=Math.floor(totalMs/3600000);
+  var m=Math.floor((totalMs%3600000)/60000);
   var str=(h>0?h+'h ':'')+m+'m';
   // My session card update
   var el=document.getElementById('my-sess-hours');
@@ -2193,18 +2191,16 @@ async function loadAttendance(){
   function _buildLocalSummary(){
     return db.members.map(function(m){
       var id=m.id;
-      var lsKey='att_login_'+id+'_'+today;
-      var loginStr=localStorage.getItem(lsKey);
-      var isPresent=!!loginStr;
-      var loginTime=loginStr?new Date(loginStr):null;
-      // Calculate current hours
-      var hours=0;
-      if(loginTime){
-        var logoutStr=localStorage.getItem('att_logout_'+id+'_'+today);
-        var endTime=logoutStr?new Date(logoutStr):new Date();
-        hours=Math.max(0,(endTime-loginTime)/3600000);
-      }
-      return{member:m,today_status:isPresent?'present':'absent',login_time:loginStr||null,logout_time:null,today_hours:hours.toFixed(1)};
+      var firstLoginKey='att_login_'+id+'_'+today;
+      var sessKey='att_sess_'+id+'_'+today;
+      var totalKey='att_total_'+id+'_'+today;
+      var firstLogin=localStorage.getItem(firstLoginKey);
+      var activeSess=localStorage.getItem(sessKey);
+      var isPresent=!!firstLogin; // was present today
+      var prevHours=parseFloat(localStorage.getItem(totalKey)||0);
+      var hours=prevHours;
+      if(activeSess) hours+=Math.max(0,(Date.now()-new Date(activeSess))/3600000);
+      return{member:m,today_status:isPresent?'present':'absent',login_time:firstLogin||null,logout_time:null,today_hours:hours.toFixed(1),isActive:!!activeSess};
     });
   }
 
