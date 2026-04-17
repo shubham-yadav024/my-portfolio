@@ -2312,14 +2312,18 @@ async function loadAttendance(){
       const m=s.member;
       const isPresent=s.today_status==='present';
       const isMe=m.id===myId;
-      const loginTime=s.login_time?new Date(s.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—';
-      const logoutTime=s.logout_time?new Date(s.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):(isPresent?'<span style="color:var(--green);font-weight:600">Active</span>':'—');
+      const isActive=isPresent&&!s.logout_time;
+      const isLoggedOut=isPresent&&!!s.logout_time;
+      const loginTime=s.login_time?new Date(s.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
+      const logoutTime=s.logout_time?new Date(s.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):(isActive?'<span style="color:var(--green);font-weight:600">Active</span>':'—');
       const hours=parseFloat(s.today_hours||0).toFixed(1);
       const hoursColor=parseFloat(hours)>6?'var(--green)':parseFloat(hours)>3?'var(--amber)':'var(--text2)';
+      const badgeStyle=isActive?'background:var(--green-bg);color:var(--green)':isLoggedOut?'background:var(--blue-bg);color:var(--blue)':'background:var(--red-bg);color:var(--red)';
+      const badgeContent=isActive?'<span style="width:6px;height:6px;border-radius:50%;background:#2ecc8a;animation:pulse-dot 1.4s infinite;display:inline-block"></span> Active':isLoggedOut?'🔵 Logged Out':'❌ Absent';
       return`<div class="att-row" data-mid="${m.id}" style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);${isMe?'background:rgba(46,125,50,0.04);margin:0 -1rem;padding-left:1rem;padding-right:1rem;border-radius:8px':''}">
         <div style="position:relative;flex-shrink:0">
           <div class="oavatar" style="background:${m.color||'#666'};width:36px;height:36px;font-size:13px">${initials(m.name)}</div>
-          <div class="att-dot" style="display:${isPresent?'block':'none'};position:absolute;bottom:0;right:0;width:10px;height:10px;border-radius:50%;border:2px solid var(--card);background:#2ecc8a"></div>
+          <div class="att-dot" style="display:${isActive?'block':'none'};position:absolute;bottom:0;right:0;width:10px;height:10px;border-radius:50%;border:2px solid var(--card);background:#2ecc8a"></div>
         </div>
         <div style="flex:1">
           <div style="font-size:14px;font-weight:500">${m.name}${isMe?' <span style="font-size:10px;color:var(--accent);font-weight:600">(You)</span>':''}</div>
@@ -2327,9 +2331,9 @@ async function loadAttendance(){
         </div>
         <div style="text-align:center;min-width:70px"><div style="font-size:11px;color:var(--text3)">Login</div><div class="att-login" style="font-size:13px;font-weight:500">${loginTime}</div></div>
         <div style="text-align:center;min-width:70px"><div style="font-size:11px;color:var(--text3)">Logout</div><div class="att-logout" style="font-size:13px;font-weight:500">${logoutTime}</div></div>
-        <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--text3)">Hours</div><div class="att-hours" style="font-size:14px;font-weight:700;color:${hoursColor}">${isPresent&&!s.logout_time?`<span class="live-att-hours" data-id="${m.id}" data-login="${s.login_time||''}">${hours}h</span>`:hours+'h'}</div></div>
-        <span class="att-badge" style="display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;${isPresent?'background:var(--green-bg);color:var(--green)':'background:var(--red-bg);color:var(--red)'}">
-          ${isPresent?'<span style="width:6px;height:6px;border-radius:50%;background:#2ecc8a;animation:pulse-dot 1.4s infinite;display:inline-block"></span> Active':'❌ Absent'}
+        <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--text3)">Hours</div><div class="att-hours" style="font-size:14px;font-weight:700;color:${hoursColor}">${isActive?`<span class="live-att-hours" data-id="${m.id}" data-login="${s.login_time||''}">${hours}h</span>`:hours+'h'}</div></div>
+        <span class="att-badge" style="display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;${badgeStyle}">
+          ${badgeContent}
         </span>
       </div>`;
     }).join(''):'<div style="text-align:center;color:var(--text3);padding:2rem">No members found</div>';
@@ -2477,16 +2481,18 @@ async function _attPanelRefreshTick(){
     if(loginCell)loginCell.textContent=loginStr;
     // Update logout cell
     var logoutCell=row.querySelector('.att-logout');
-    if(logoutCell)logoutCell.innerHTML=s.logout_time?new Date(s.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):(isPresent?'<span style="color:var(--green);font-weight:600">Active</span>':'—');
+    var isActive=isPresent&&!s.logout_time;
+    var isLoggedOut=isPresent&&!!s.logout_time;
+    if(logoutCell)logoutCell.innerHTML=s.logout_time?new Date(s.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):(isActive?'<span style="color:var(--green);font-weight:600">Active</span>':'—');
     // Update hours cell
     var hoursCell=row.querySelector('.att-hours');
-    if(hoursCell)hoursCell.textContent=isPresent&&!s.logout_time?hStr:hours.toFixed(1)+'h';
+    if(hoursCell)hoursCell.textContent=isActive?hStr:hours.toFixed(1)+'h';
     // Update status badge
     var badge=row.querySelector('.att-badge');
     if(badge){
-      badge.style.background=isPresent?'var(--green-bg)':'var(--red-bg)';
-      badge.style.color=isPresent?'var(--green)':'var(--red)';
-      badge.innerHTML=isPresent?'<span style="width:6px;height:6px;border-radius:50%;background:#2ecc8a;animation:pulse-dot 1.4s infinite;display:inline-block"></span> Active':'❌ Absent';
+      badge.style.background=isActive?'var(--green-bg)':isLoggedOut?'var(--blue-bg)':'var(--red-bg)';
+      badge.style.color=isActive?'var(--green)':isLoggedOut?'var(--blue)':'var(--red)';
+      badge.innerHTML=isActive?'<span style="width:6px;height:6px;border-radius:50%;background:#2ecc8a;animation:pulse-dot 1.4s infinite;display:inline-block"></span> Active':isLoggedOut?'🔵 Logged Out':'❌ Absent';
     }
     // Update green dot on avatar
     var dot=row.querySelector('.att-dot');
