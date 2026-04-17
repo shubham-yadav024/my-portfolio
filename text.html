@@ -2644,7 +2644,7 @@ async function doLogin(){
       // Reviewer: any valid user can log in as reviewer (read-only view)
       const finalRole = selectedLoginRole==='reviewer' ? 'reviewer' : dbRole;
       currentUser={id:res.user.id,username:res.user.username,name:res.user.name,role:finalRole,memberId:res.user.member_id||null};
-      if(finalRole!=='reviewer')attendanceLogin(currentUser.memberId||currentUser.id);
+      if(finalRole!=='reviewer'&&finalRole!=='admin')attendanceLogin(currentUser.memberId||currentUser.id);
       launchApp();return;
     }
     err.textContent=(res&&res.message)||'Login failed. Try again.';
@@ -2661,7 +2661,7 @@ async function doLogin(){
     const finalRole = selectedLoginRole==='reviewer' ? 'reviewer' : dbRole;
     currentUser={...user, role:finalRole};
     localStorage.setItem('tfp2_session',JSON.stringify({id:user.id,username:user.username}));
-    if(finalRole!=='reviewer')attendanceLogin(currentUser.memberId||currentUser.id);
+    if(finalRole!=='reviewer'&&finalRole!=='admin')attendanceLogin(currentUser.memberId||currentUser.id);
     launchApp();
   }
 }
@@ -2682,7 +2682,7 @@ async function doRegister(){
     if(res&&res.success){
       currentUser={id:res.user.id,username:res.user.username,name:res.user.name,role:'user',memberId};
       err.style.color='var(--green)';err.textContent='Account created!';
-      setTimeout(()=>{attendanceLogin(currentUser.memberId||currentUser.id);launchApp();},600);return;
+      setTimeout(()=>{if(currentUser.role!=='admin'&&currentUser.role!=='reviewer')attendanceLogin(currentUser.memberId||currentUser.id);launchApp();},600);return;
     }
     err.style.color='var(--red)';err.textContent=(res&&res.message)||'Registration failed.';
   }catch(e){
@@ -3444,13 +3444,13 @@ function init(){
     if(u){
       currentUser={id:u.id,username:u.username,name:u.name,role:u.role==='admin'?'admin':'user',memberId:u.member_id||null};
       // Resume attendance tracking immediately on session restore
-      if(currentUser.role!=='reviewer')attendanceLogin(currentUser.memberId||currentUser.id);
+      if(currentUser.role!=='reviewer'&&currentUser.role!=='admin')attendanceLogin(currentUser.memberId||currentUser.id);
       launchApp();return;
     }
   }
   if(tryRestoreSession()){
     // Resume attendance tracking immediately on session restore
-    if(currentUser&&currentUser.role!=='reviewer')attendanceLogin(currentUser.memberId||currentUser.id);
+    if(currentUser&&currentUser.role!=='reviewer'&&currentUser.role!=='admin')attendanceLogin(currentUser.memberId||currentUser.id);
     launchApp();return;
   }
   document.getElementById('login-screen').style.display='flex';
