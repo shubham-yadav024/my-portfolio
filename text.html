@@ -2034,10 +2034,9 @@ async function _attSyncToSupa(memberId,today,loginTime,currentSessStart){
     var ex=await supa.from('attendance').select('id').eq('member_id',memberId).eq('date',today).maybeSingle();
     if(ex&&ex.data){
       localStorage.setItem('att_supa_id',ex.data.id);
-      // New session started — clear logout_time and set login_time to current session start
-      // so panel calculates: total_hours (accumulated) + (now - login_time) (current session)
+      // New session — clear logout_time, update session_start (NOT login_time — keep first login)
       var sessStart=currentSessStart||loginTime;
-      supa.from('attendance').update({logout_time:null,login_time:sessStart}).eq('id',ex.data.id).then(function(){}).catch(function(){});
+      supa.from('attendance').update({logout_time:null,session_start:sessStart}).eq('id',ex.data.id).then(function(){}).catch(function(){});
       return;
     }
     var memberName=(currentUser&&(currentUser.name||currentUser.username))||'';
@@ -2046,6 +2045,7 @@ async function _attSyncToSupa(memberId,today,loginTime,currentSessStart){
       member_name:memberName,
       date:today,
       login_time:loginTime,
+      session_start:currentSessStart||loginTime,
       status:'present'
     }).select('id').single();
     if(res&&res.data)localStorage.setItem('att_supa_id',res.data.id);
@@ -2086,7 +2086,7 @@ async function attendanceLogout(){
   var supaId=localStorage.getItem('att_supa_id');
   _getAttSupa().then(function(supa){
     if(!supa)return;
-    var update={logout_time:now.toISOString(),total_hours:parseFloat(newTotal.toFixed(2))};
+    var update={logout_time:now.toISOString(),total_hours:parseFloat(newTotal.toFixed(2)),session_start:null};
     if(supaId){
       supa.from('attendance').update(update).eq('id',supaId).then(function(){}).catch(function(){});
     }else{
@@ -2456,9 +2456,10 @@ async function _attPanelRefreshTick(){
     var rec=supaData.find(function(r){return r.member_id===m.id||(r.member_name&&m.name&&r.member_name.toLowerCase()===m.name.toLowerCase());});
     if(!rec)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:'0.0'};
     var hours=rec.total_hours||0;
-    if(!rec.logout_time&&rec.login_time){
+    var activeSess=rec.session_start||(!rec.logout_time&&rec.login_time?rec.login_time:null);
+    if(!rec.logout_time&&activeSess){
       // accumulated hours from prior sessions + current active session
-      hours=(rec.total_hours||0)+Math.max(0,(Date.now()-new Date(rec.login_time))/3600000);
+      hours=(rec.total_hours||0)+Math.max(0,(Date.now()-new Date(activeSess))/3600000);
     }
     return{member:m,today_status:'present',login_time:rec.login_time,logout_time:rec.logout_time,today_hours:parseFloat(hours).toFixed(1)};
   });
