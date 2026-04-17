@@ -1940,6 +1940,8 @@ const AttendanceAPI={
 var _attSupaClient=null;
 var _attHoursTimer=null;
 var _attLoginTime=null;
+var _attPanelTimer=null;   // auto-refresh timer for the attendance panel
+var _attLastSupaData=null; // cache of last Supabase fetch
 
 async function _getAttSupa(){
   if(_attSupaClient)return _attSupaClient;
@@ -2085,13 +2087,16 @@ function _updateActiveHoursDisplay(){
   // Sidebar hours badge update
   var sb=document.getElementById('my-hours-badge');
   if(sb){sb.textContent=str;sb.style.display='inline';}
-  // Update live hours display in the attendance panel for the current user
-  var myId=currentUser&&(currentUser.memberId||currentUser.id);
-  if(myId){
-    document.querySelectorAll('.live-att-hours[data-id="'+myId+'"]').forEach(function(span){
-      span.textContent=str;
-    });
-  }
+  // Update live hours for ALL active users in the attendance panel
+  document.querySelectorAll('.live-att-hours[data-login]').forEach(function(span){
+    var loginStr=span.getAttribute('data-login');
+    if(!loginStr)return;
+    var ms=Date.now()-new Date(loginStr).getTime();
+    if(ms<0)return;
+    var h=Math.floor(ms/3600000);
+    var m=Math.floor((ms%3600000)/60000);
+    span.textContent=(h>0?h+'h ':'')+m+'m';
+  });
 }
 
 function _updateSessionCard(){
@@ -2211,19 +2216,19 @@ async function loadAttendance(){
       const logoutTime=s.logout_time?new Date(s.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):(isPresent?'<span style="color:var(--green);font-weight:600">Active</span>':'—');
       const hours=parseFloat(s.today_hours||0).toFixed(1);
       const hoursColor=parseFloat(hours)>6?'var(--green)':parseFloat(hours)>3?'var(--amber)':'var(--text2)';
-      return`<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);${isMe?'background:rgba(46,125,50,0.04);margin:0 -1rem;padding-left:1rem;padding-right:1rem;border-radius:8px':''}">
+      return`<div class="att-row" data-mid="${m.id}" style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);${isMe?'background:rgba(46,125,50,0.04);margin:0 -1rem;padding-left:1rem;padding-right:1rem;border-radius:8px':''}">
         <div style="position:relative;flex-shrink:0">
           <div class="oavatar" style="background:${m.color||'#666'};width:36px;height:36px;font-size:13px">${initials(m.name)}</div>
-          ${isPresent?'<div style="position:absolute;bottom:0;right:0;width:10px;height:10px;border-radius:50%;border:2px solid var(--card);background:#2ecc8a"></div>':''}
+          <div class="att-dot" style="display:${isPresent?'block':'none'};position:absolute;bottom:0;right:0;width:10px;height:10px;border-radius:50%;border:2px solid var(--card);background:#2ecc8a"></div>
         </div>
         <div style="flex:1">
           <div style="font-size:14px;font-weight:500">${m.name}${isMe?' <span style="font-size:10px;color:var(--accent);font-weight:600">(You)</span>':''}</div>
           <div style="font-size:12px;color:var(--text3)">${m.role||''}</div>
         </div>
-        <div style="text-align:center;min-width:70px"><div style="font-size:11px;color:var(--text3)">Login</div><div style="font-size:13px;font-weight:500">${loginTime}</div></div>
-        <div style="text-align:center;min-width:70px"><div style="font-size:11px;color:var(--text3)">Logout</div><div style="font-size:13px;font-weight:500">${logoutTime}</div></div>
-        <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--text3)">Hours</div><div style="font-size:14px;font-weight:700;color:${hoursColor}">${isPresent&&!s.logout_time?'<span class="live-att-hours" data-id="'+m.id+'">${hours}h</span>':hours+'h'}</div></div>
-        <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;${isPresent?'background:var(--green-bg);color:var(--green)':'background:var(--red-bg);color:var(--red)'}">
+        <div style="text-align:center;min-width:70px"><div style="font-size:11px;color:var(--text3)">Login</div><div class="att-login" style="font-size:13px;font-weight:500">${loginTime}</div></div>
+        <div style="text-align:center;min-width:70px"><div style="font-size:11px;color:var(--text3)">Logout</div><div class="att-logout" style="font-size:13px;font-weight:500">${logoutTime}</div></div>
+        <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--text3)">Hours</div><div class="att-hours" style="font-size:14px;font-weight:700;color:${hoursColor}">${isPresent&&!s.logout_time?`<span class="live-att-hours" data-id="${m.id}" data-login="${s.login_time||''}">${hours}h</span>`:hours+'h'}</div></div>
+        <span class="att-badge" style="display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;${isPresent?'background:var(--green-bg);color:var(--green)':'background:var(--red-bg);color:var(--red)'}">
           ${isPresent?'<span style="width:6px;height:6px;border-radius:50%;background:#2ecc8a;animation:pulse-dot 1.4s infinite;display:inline-block"></span> Active':'❌ Absent'}
         </span>
       </div>`;
@@ -2302,6 +2307,74 @@ async function loadAttendance(){
       }).catch(function(){});
     }
   }
+}
+
+// ── Auto-refresh attendance panel every 5 seconds ──
+function _startAttPanelRefresh(){
+  _stopAttPanelRefresh();
+  _attPanelRefreshTick(); // immediate first tick
+  _attPanelTimer=setInterval(_attPanelRefreshTick,5000);
+}
+function _stopAttPanelRefresh(){
+  if(_attPanelTimer){clearInterval(_attPanelTimer);_attPanelTimer=null;}
+}
+async function _attPanelRefreshTick(){
+  var attView=document.getElementById('view-attendance');
+  if(!attView||attView.style.display==='none')return;
+  var today=new Date().toISOString().slice(0,10);
+  var supa=await _getAttSupa();
+  if(!supa)return;
+  var res=await supa.from('attendance').select('*').eq('date',today);
+  if(!res||!res.data||!res.data.length)return;
+  var supaData=res.data;
+  // Merge with members list
+  var merged=db.members.map(function(m){
+    var rec=supaData.find(function(r){return r.member_id===m.id;});
+    if(!rec)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:'0.0'};
+    var hours=rec.total_hours||0;
+    if(!rec.logout_time&&rec.login_time){
+      hours=Math.max(0,(Date.now()-new Date(rec.login_time))/3600000);
+    }
+    return{member:m,today_status:'present',login_time:rec.login_time,logout_time:rec.logout_time,today_hours:parseFloat(hours).toFixed(1)};
+  });
+  // Update stats counters
+  var present=merged.filter(function(s){return s.today_status==='present';}).length;
+  var absent=merged.filter(function(s){return s.today_status==='absent';}).length;
+  var totalH=merged.filter(function(s){return parseFloat(s.today_hours)>0;}).reduce(function(a,s){return a+parseFloat(s.today_hours);},0);
+  document.getElementById('att-present').textContent=present;
+  document.getElementById('att-absent').textContent=absent;
+  document.getElementById('att-avghours').textContent=(present>0?(totalH/present).toFixed(1):0)+'h';
+  // Update each row in-place (no full re-render — avoids flicker)
+  var myId=currentUser&&(currentUser.memberId||currentUser.id);
+  merged.forEach(function(s){
+    var m=s.member;
+    var isPresent=s.today_status==='present';
+    var loginStr=s.login_time?new Date(s.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—';
+    var hours=parseFloat(s.today_hours||0);
+    var hStr=Math.floor(hours)+'h '+(Math.floor((hours%1)*60))+'m';
+    // Find existing row by data-member-id, or trigger full re-render if row missing
+    var row=document.querySelector('.att-row[data-mid="'+m.id+'"]');
+    if(!row){loadAttendance();return;}
+    // Update login time cell
+    var loginCell=row.querySelector('.att-login');
+    if(loginCell)loginCell.textContent=loginStr;
+    // Update logout cell
+    var logoutCell=row.querySelector('.att-logout');
+    if(logoutCell)logoutCell.innerHTML=s.logout_time?new Date(s.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):(isPresent?'<span style="color:var(--green);font-weight:600">Active</span>':'—');
+    // Update hours cell
+    var hoursCell=row.querySelector('.att-hours');
+    if(hoursCell)hoursCell.textContent=isPresent&&!s.logout_time?hStr:hours.toFixed(1)+'h';
+    // Update status badge
+    var badge=row.querySelector('.att-badge');
+    if(badge){
+      badge.style.background=isPresent?'var(--green-bg)':'var(--red-bg)';
+      badge.style.color=isPresent?'var(--green)':'var(--red)';
+      badge.innerHTML=isPresent?'<span style="width:6px;height:6px;border-radius:50%;background:#2ecc8a;animation:pulse-dot 1.4s infinite;display:inline-block"></span> Active':'❌ Absent';
+    }
+    // Update green dot on avatar
+    var dot=row.querySelector('.att-dot');
+    if(dot)dot.style.display=isPresent?'block':'none';
+  });
 }
 
 async function _loadAttFromSupa(date){
@@ -2640,7 +2713,7 @@ function showView(name,el){
   if(name==='field')renderFieldJobs();
   if(name==='escalation')renderEscalation();
   if(name==='analytics')renderAnalytics();
-  if(name==='attendance')loadAttendance();
+  if(name==='attendance'){loadAttendance();_startAttPanelRefresh();}else{_stopAttPanelRefresh();}
   if(name==='team')renderTeam();
   if(name==='chat')loadChat();
   if(name==='chat')loadChat();
