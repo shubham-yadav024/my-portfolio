@@ -2102,7 +2102,7 @@ async function attendanceLogout(){
 function _startAttTimer(){
   if(_attHoursTimer)clearInterval(_attHoursTimer);
   _updateActiveHoursDisplay();
-  _attHoursTimer=setInterval(_updateActiveHoursDisplay,5000); // refresh every 5 seconds
+  _attHoursTimer=setInterval(_updateActiveHoursDisplay,1000); // refresh every 1 second
 }
 
 function _updateActiveHoursDisplay(){
@@ -2434,7 +2434,7 @@ async function loadAttendance(){
 function _startAttPanelRefresh(){
   _stopAttPanelRefresh();
   _attPanelRefreshTick(); // immediate first tick
-  _attPanelTimer=setInterval(_attPanelRefreshTick,5000);
+  _attPanelTimer=setInterval(_attPanelRefreshTick,3000);
 }
 function _stopAttPanelRefresh(){
   if(_attPanelTimer){clearInterval(_attPanelTimer);_attPanelTimer=null;}
