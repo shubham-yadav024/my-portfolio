@@ -2018,8 +2018,8 @@ async function attendanceLogin(memberId){
   _startAttTimer();_updateSessionCard();
   if(document.getElementById('view-attendance')&&document.getElementById('view-attendance').style.display!=='none')setTimeout(loadAttendance,100);
 
-  // Background: sync to Supabase (insert if no record today, else just store id)
-  _attSyncToSupa(id,today,localStorage.getItem(firstLoginKey));
+  // Background: sync to Supabase (insert first session, update login_time on new session)
+  _attSyncToSupa(id,today,localStorage.getItem(firstLoginKey),now);
 
   // Background: sync to backend
   AttendanceAPI.markLogin(id).then(function(res){
@@ -2027,14 +2027,17 @@ async function attendanceLogin(memberId){
   }).catch(function(){});
 }
 
-async function _attSyncToSupa(memberId,today,loginTime){
+async function _attSyncToSupa(memberId,today,loginTime,currentSessStart){
   try{
     var supa=await _getAttSupa();
     if(!supa)return;
-    // Skip insert if a record for today already exists
     var ex=await supa.from('attendance').select('id').eq('member_id',memberId).eq('date',today).maybeSingle();
     if(ex&&ex.data){
       localStorage.setItem('att_supa_id',ex.data.id);
+      // New session started — clear logout_time and set login_time to current session start
+      // so panel calculates: total_hours (accumulated) + (now - login_time) (current session)
+      var sessStart=currentSessStart||loginTime;
+      supa.from('attendance').update({logout_time:null,login_time:sessStart}).eq('id',ex.data.id).then(function(){}).catch(function(){});
       return;
     }
     var memberName=(currentUser&&(currentUser.name||currentUser.username))||'';
@@ -2454,7 +2457,8 @@ async function _attPanelRefreshTick(){
     if(!rec)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:'0.0'};
     var hours=rec.total_hours||0;
     if(!rec.logout_time&&rec.login_time){
-      hours=Math.max(0,(Date.now()-new Date(rec.login_time))/3600000);
+      // accumulated hours from prior sessions + current active session
+      hours=(rec.total_hours||0)+Math.max(0,(Date.now()-new Date(rec.login_time))/3600000);
     }
     return{member:m,today_status:'present',login_time:rec.login_time,logout_time:rec.logout_time,today_hours:parseFloat(hours).toFixed(1)};
   });
