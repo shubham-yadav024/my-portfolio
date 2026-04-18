@@ -1825,7 +1825,8 @@ var paRP={
       if(supa){var ar=await supa.from('attendance').select('*').eq('date',today);if(ar&&ar.data)attRows=ar.data;}
     }catch(e){}
     var rows=members.map(function(m){
-      var rec=attRows.find(function(r){var mn=(r.member_name||'').toLowerCase().trim();var mname=(m.name||'').toLowerCase().trim();return r.member_id===m.id||mn===mname||(mn&&mname&&(mn.includes(mname)||mname.includes(mn)));});
+      var _n=function(s){return(s||'').toLowerCase().replace(/\b(mr|mrs|ms|dr|prof)\b\.?/gi,'').replace(/[.\-_]/g,' ').replace(/\s+/g,' ').trim();};
+      var rec=attRows.find(function(r){var mn=_n(r.member_name);var mname=_n(m.name);return r.member_id===m.id||mn===mname||(mn&&mname&&(mn.includes(mname)||mname.includes(mn)));});
       if(rec){
         var loginTime=rec.login_time?new Date(rec.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
         var hrs=parseFloat(rec.total_hours||0);
@@ -2683,6 +2684,7 @@ function saveDB(){localStorage.setItem('tfp2_db',JSON.stringify(db));window.db=d
 window.TasksAPI=TasksAPI;
 window.isOverdue=isOverdue;
 window.getMember=getMember;
+window._normAttName=_normAttName;
 Object.defineProperty(window,'db',{get:function(){return db;},set:function(v){db=v;},configurable:true});
 if(!db.users||!Array.isArray(db.users)){db.users=[{id:'u0',username:'admin',password:'admin123',name:'Admin',role:'admin',memberId:null}];saveDB();}
 if(!db.users.find(u=>u.username==='admin')){db.users.unshift({id:'u0',username:'admin',password:'admin123',name:'Admin',role:'admin',memberId:null});saveDB();}
