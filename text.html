@@ -2029,10 +2029,17 @@ async function attendanceLogin(memberId){
     // ID match fallback
     if(!matchedMember&&id)matchedMember=db.members.find(function(m){return m.id===id;});
   }
-  if(matchedMember){id=matchedMember.id;canonicalName=matchedMember.name;}
+  if(matchedMember){
+    // Skip attendance for admin members (Ashish, Pravin etc.)
+    if(matchedMember.role==='admin'||matchedMember.role==='reviewer')return;
+    id=matchedMember.id;canonicalName=matchedMember.name;
+  }
   if(!id)id=(currentUser&&currentUser.id);
   if(!id)return;
   if(!canonicalName)canonicalName=(currentUser&&(currentUser.name||currentUser.username))||'';
+  // Also skip if user name matches known admin names
+  var _skipNames=['ashish yadav','pravin bidaye','ashish','pravin bidaye'];
+  if(_skipNames.some(function(n){return canonicalName.toLowerCase().includes(n);}))return;
 
   var today=new Date().toISOString().slice(0,10);
   var firstLoginKey='att_login_'+id+'_'+today;   // first login time of day (never deleted)
