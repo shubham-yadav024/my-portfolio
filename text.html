@@ -1966,6 +1966,7 @@ var _attPrevHours=0;          // accumulated hours from completed sessions today
 var _attPanelTimer=null;
 var _attLastSupaData=null;
 
+function _normAttName(s){return(s||'').toLowerCase().replace(/\b(mr|mrs|ms|dr|prof)\b\.?/gi,'').replace(/[.\-_]/g,' ').replace(/\s+/g,' ').trim();}
 async function _getAttSupa(){
   if(_attSupaClient)return _attSupaClient;
   try{
@@ -1984,10 +1985,12 @@ async function attendanceLogin(memberId){
   var id=memberId||(currentUser&&currentUser.memberId);
   var matchedMember=null;
   if(currentUser){
-    // Try exact name match first, then partial/includes match
-    var cname=(currentUser.name||currentUser.username||'').toLowerCase().trim();
-    matchedMember=db.members.find(function(m){return m.name&&m.name.toLowerCase().trim()===cname;});
-    if(!matchedMember&&cname)matchedMember=db.members.find(function(m){return m.name&&(m.name.toLowerCase().includes(cname)||cname.includes(m.name.toLowerCase().trim()));});
+    var cname=_normAttName(currentUser.name||currentUser.username||'');
+    // Exact normalized match
+    matchedMember=db.members.find(function(m){return _normAttName(m.name)===cname;});
+    // Partial match (one contains the other)
+    if(!matchedMember&&cname)matchedMember=db.members.find(function(m){var mn=_normAttName(m.name);return mn&&(mn.includes(cname)||cname.includes(mn));});
+    // ID match fallback
     if(!matchedMember&&id)matchedMember=db.members.find(function(m){return m.id===id;});
   }
   if(matchedMember){id=matchedMember.id;canonicalName=matchedMember.name;}
@@ -2081,6 +2084,7 @@ async function attendanceLogout(){
   localStorage.removeItem(sessKey);
   localStorage.removeItem('att_member_id');
   localStorage.removeItem('att_login_time');
+  localStorage.removeItem('att_supa_id');
 
   // Sync logout to backend
   var sessionId=localStorage.getItem('att_session_id');
@@ -2362,7 +2366,7 @@ async function loadAttendance(){
   _loadAttFromSupa(today).then(function(supaData){
     if(supaData&&supaData.length>0){
       var merged=db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer';}).map(function(m){
-        var rec=supaData.find(function(r){var mn=(r.member_name||'').toLowerCase().trim();var mname=(m.name||'').toLowerCase().trim();return r.member_id===m.id||mn===mname||(mn&&mname&&(mn.includes(mname)||mname.includes(mn)));});
+        var rec=supaData.find(function(r){var mn=_normAttName(r.member_name);var mname=_normAttName(m.name);return r.member_id===m.id||mn===mname||(mn&&mname&&(mn.includes(mname)||mname.includes(mn)));});
         if(!rec)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:0};
         var hours=rec.total_hours||0;
         var activeSess=rec.session_start||(!rec.logout_time&&rec.login_time?rec.login_time:null);
@@ -2411,7 +2415,7 @@ async function loadAttendance(){
 
       // Render rows
       histList.innerHTML=rows.map(function(r){
-        const member=db.members.find(function(m){var mn=(r.member_name||'').toLowerCase().trim();var mname=(m.name||'').toLowerCase().trim();return m.id===r.member_id||mn===mname||(mn&&mname&&(mn.includes(mname)||mname.includes(mn)));});
+        const member=db.members.find(function(m){var mn=_normAttName(r.member_name);var mname=_normAttName(m.name);return m.id===r.member_id||mn===mname||(mn&&mname&&(mn.includes(mname)||mname.includes(mn)));});
         if(!member||member.role==='admin'||member.role==='reviewer')return''; // skip admins
         const loginT=r.login_time?new Date(r.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
         const logoutT=r.logout_time?new Date(r.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'<span style="color:var(--green);font-weight:600">Active</span>';
