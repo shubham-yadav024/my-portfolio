@@ -2002,7 +2002,7 @@ var _attPanelTimer=null;
 var _attLastSupaData=null;
 
 function _normAttName(s){return(s||'').toLowerCase().replace(/\b(mr|mrs|ms|dr|prof)\b\.?/gi,'').replace(/[.\-_]/g,' ').replace(/\s+/g,' ').trim();}
-function _attNameMatch(a,b){var na=_normAttName(a),nb=_normAttName(b);if(!na||!nb)return false;if(na===nb||na.includes(nb)||nb.includes(na))return true;var wa=na.split(' '),wb=nb.split(' ');return wa.filter(function(w){return w.length>2&&wb.includes(w);}).length>=2;}
+function _attNameMatch(a,b){var na=_normAttName(a),nb=_normAttName(b);if(!na||!nb)return false;if(na===nb||na.includes(nb)||nb.includes(na))return true;var wa=na.split(' ').filter(function(w){return w.length>3;});var wb=nb.split(' ').filter(function(w){return w.length>3;});return wa.some(function(w){return wb.includes(w);});}
 window._getAttSupa=async function _getAttSupa(){
   if(_attSupaClient)return _attSupaClient;
   try{
@@ -2680,6 +2680,8 @@ let db=JSON.parse(localStorage.getItem('tfp2_db')||'null')||{
   users:[{id:'u0',username:'admin',password:'admin123',name:'Admin',role:'admin',memberId:null}]
 };
 function saveDB(){localStorage.setItem('tfp2_db',JSON.stringify(db));window.db=db;}
+// Fix legacy member names in localStorage
+(function(){var fixes={'Vijay .B. Tawade':'Vijay B Tawade','MR K Suresh':'Mr K Suresh'};var changed=false;db.members.forEach(function(m){if(fixes[m.name]){m.name=fixes[m.name];changed=true;}});if(changed)saveDB();})();
 // Expose globals for Pushp Assistant (runs in separate IIFE scope)
 window.TasksAPI=TasksAPI;
 window.isOverdue=isOverdue;
