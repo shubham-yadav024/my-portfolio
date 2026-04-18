@@ -2040,12 +2040,16 @@ async function _attSyncToSupa(memberId,today,loginTime,currentSessStart,memberNa
     var supa=await _getAttSupa();
     if(!supa)return;
     if(!memberName)memberName=(currentUser&&(currentUser.name||currentUser.username))||'';
+    // Try finding by member_id first, then by member_name (handles legacy/mismatched IDs)
     var ex=await supa.from('attendance').select('id').eq('member_id',memberId).eq('date',today).maybeSingle();
+    if((!ex||!ex.data)&&memberName){
+      ex=await supa.from('attendance').select('id').eq('date',today).ilike('member_name',memberName).maybeSingle();
+    }
     if(ex&&ex.data){
       localStorage.setItem('att_supa_id',ex.data.id);
-      // New session — clear logout_time, update session_start (NOT login_time — keep first login)
+      // New session — clear logout_time, update session_start, fix member_id if needed
       var sessStart=currentSessStart||loginTime;
-      supa.from('attendance').update({logout_time:null,session_start:sessStart,member_name:memberName}).eq('id',ex.data.id).then(function(){}).catch(function(){});
+      supa.from('attendance').update({logout_time:null,session_start:sessStart,member_id:memberId,member_name:memberName}).eq('id',ex.data.id).then(function(){}).catch(function(){});
       return;
     }
     var res=await supa.from('attendance').insert({
