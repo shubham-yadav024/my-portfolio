@@ -2621,22 +2621,13 @@ function isAdminOrReviewer(){return isAdmin()||isReviewer();}
 // TASK VISIBILITY — role-based
 // ═══════════════════════════════════════════
 function getVisibleTasks(){
-  if(isAdmin()||isReviewer()) return db.tasks; // Admin & Reviewer see all tasks
-  if(!currentUser || !currentUser.memberId) return db.tasks; // fallback
-  // Employee sees only tasks assigned to them as owner or representative
-  return db.tasks.filter(t =>
-    t.ownerId === currentUser.memberId ||
-    t.repId === currentUser.memberId
-  );
+  return db.tasks; // Everyone sees all tasks
 }
 
 function canEdit(task){
   if(!currentUser)return false;
-  if(isReviewer())return false; // Reviewer = read-only, no edits
-  if(isAdmin())return true;
-  if(task.ownerId&&currentUser.memberId&&task.ownerId===currentUser.memberId)return true;
-  if(task.repId&&currentUser.memberId&&task.repId===currentUser.memberId)return true;
-  return false;
+  if(isReviewer())return false; // Reviewer = read-only
+  return true; // Admin and all employees can edit any task
 }
 
 let taskFilter='all',escStepCount=0,editingId=null;
