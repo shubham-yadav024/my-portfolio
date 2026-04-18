@@ -1979,16 +1979,21 @@ async function _getAttSupa(){
 }
 
 async function attendanceLogin(memberId){
-  // Resolve member ID: memberId → currentUser.memberId → name match → currentUser.id
+  // Resolve best matching member from db.members
+  var canonicalName='';
   var id=memberId||(currentUser&&currentUser.memberId);
-  if(!id&&currentUser){
-    var matched=db.members.find(function(m){
-      return m.name&&currentUser.name&&m.name.toLowerCase()===currentUser.name.toLowerCase();
-    });
-    if(matched)id=matched.id;
+  var matchedMember=null;
+  if(currentUser){
+    // Try exact name match first, then partial/includes match
+    var cname=(currentUser.name||currentUser.username||'').toLowerCase().trim();
+    matchedMember=db.members.find(function(m){return m.name&&m.name.toLowerCase().trim()===cname;});
+    if(!matchedMember&&cname)matchedMember=db.members.find(function(m){return m.name&&(m.name.toLowerCase().includes(cname)||cname.includes(m.name.toLowerCase().trim()));});
+    if(!matchedMember&&id)matchedMember=db.members.find(function(m){return m.id===id;});
   }
+  if(matchedMember){id=matchedMember.id;canonicalName=matchedMember.name;}
   if(!id)id=(currentUser&&currentUser.id);
   if(!id)return;
+  if(!canonicalName)canonicalName=(currentUser&&(currentUser.name||currentUser.username))||'';
 
   var today=new Date().toISOString().slice(0,10);
   var firstLoginKey='att_login_'+id+'_'+today;   // first login time of day (never deleted)
@@ -2019,7 +2024,7 @@ async function attendanceLogin(memberId){
   if(document.getElementById('view-attendance')&&document.getElementById('view-attendance').style.display!=='none')setTimeout(loadAttendance,100);
 
   // Background: sync to Supabase (insert first session, update login_time on new session)
-  _attSyncToSupa(id,today,localStorage.getItem(firstLoginKey),now);
+  _attSyncToSupa(id,today,localStorage.getItem(firstLoginKey),now,canonicalName);
 
   // Background: sync to backend
   AttendanceAPI.markLogin(id).then(function(res){
@@ -2027,19 +2032,19 @@ async function attendanceLogin(memberId){
   }).catch(function(){});
 }
 
-async function _attSyncToSupa(memberId,today,loginTime,currentSessStart){
+async function _attSyncToSupa(memberId,today,loginTime,currentSessStart,memberName){
   try{
     var supa=await _getAttSupa();
     if(!supa)return;
+    if(!memberName)memberName=(currentUser&&(currentUser.name||currentUser.username))||'';
     var ex=await supa.from('attendance').select('id').eq('member_id',memberId).eq('date',today).maybeSingle();
     if(ex&&ex.data){
       localStorage.setItem('att_supa_id',ex.data.id);
       // New session — clear logout_time, update session_start (NOT login_time — keep first login)
       var sessStart=currentSessStart||loginTime;
-      supa.from('attendance').update({logout_time:null,session_start:sessStart}).eq('id',ex.data.id).then(function(){}).catch(function(){});
+      supa.from('attendance').update({logout_time:null,session_start:sessStart,member_name:memberName}).eq('id',ex.data.id).then(function(){}).catch(function(){});
       return;
     }
-    var memberName=(currentUser&&(currentUser.name||currentUser.username))||'';
     var res=await supa.from('attendance').insert({
       member_id:memberId,
       member_name:memberName,
@@ -2357,7 +2362,7 @@ async function loadAttendance(){
   _loadAttFromSupa(today).then(function(supaData){
     if(supaData&&supaData.length>0){
       var merged=db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer';}).map(function(m){
-        var rec=supaData.find(function(r){return r.member_id===m.id||(r.member_name&&m.name&&r.member_name.toLowerCase()===m.name.toLowerCase());});
+        var rec=supaData.find(function(r){var mn=(r.member_name||'').toLowerCase().trim();var mname=(m.name||'').toLowerCase().trim();return r.member_id===m.id||mn===mname||(mn&&mname&&(mn.includes(mname)||mname.includes(mn)));});
         if(!rec)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:0};
         var hours=rec.total_hours||0;
         var activeSess=rec.session_start||(!rec.logout_time&&rec.login_time?rec.login_time:null);
@@ -2406,7 +2411,7 @@ async function loadAttendance(){
 
       // Render rows
       histList.innerHTML=rows.map(function(r){
-        const member=db.members.find(function(m){return m.id===r.member_id||(r.member_name&&m.name&&m.name.toLowerCase()===r.member_name.toLowerCase());});
+        const member=db.members.find(function(m){var mn=(r.member_name||'').toLowerCase().trim();var mname=(m.name||'').toLowerCase().trim();return m.id===r.member_id||mn===mname||(mn&&mname&&(mn.includes(mname)||mname.includes(mn)));});
         if(!member||member.role==='admin'||member.role==='reviewer')return''; // skip admins
         const loginT=r.login_time?new Date(r.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
         const logoutT=r.logout_time?new Date(r.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'<span style="color:var(--green);font-weight:600">Active</span>';
@@ -2455,7 +2460,7 @@ async function _attPanelRefreshTick(){
   var supaData=res.data;
   // Merge with members list (exclude admins/reviewers)
   var merged=db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer';}).map(function(m){
-    var rec=supaData.find(function(r){return r.member_id===m.id||(r.member_name&&m.name&&r.member_name.toLowerCase()===m.name.toLowerCase());});
+    var rec=supaData.find(function(r){var mn=(r.member_name||'').toLowerCase().trim();var mname=(m.name||'').toLowerCase().trim();return r.member_id===m.id||mn===mname||(mn&&mname&&(mn.includes(mname)||mname.includes(mn)));});
     if(!rec)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:'0.0'};
     var hours=rec.total_hours||0;
     var activeSess=rec.session_start||(!rec.logout_time&&rec.login_time?rec.login_time:null);
