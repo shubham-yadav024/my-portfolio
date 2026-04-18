@@ -2678,7 +2678,12 @@ let db=JSON.parse(localStorage.getItem('tfp2_db')||'null')||{
   tasks:[],activity:[],
   users:[{id:'u0',username:'admin',password:'admin123',name:'Admin',role:'admin',memberId:null}]
 };
-function saveDB(){localStorage.setItem('tfp2_db',JSON.stringify(db));}
+function saveDB(){localStorage.setItem('tfp2_db',JSON.stringify(db));window.db=db;}
+// Expose globals for Pushp Assistant (runs in separate IIFE scope)
+window.TasksAPI=TasksAPI;
+window.isOverdue=isOverdue;
+window.getMember=getMember;
+Object.defineProperty(window,'db',{get:function(){return db;},set:function(v){db=v;},configurable:true});
 if(!db.users||!Array.isArray(db.users)){db.users=[{id:'u0',username:'admin',password:'admin123',name:'Admin',role:'admin',memberId:null}];saveDB();}
 if(!db.users.find(u=>u.username==='admin')){db.users.unshift({id:'u0',username:'admin',password:'admin123',name:'Admin',role:'admin',memberId:null});saveDB();}
 
