@@ -2110,11 +2110,23 @@ async function attendanceLogout(){
   if(document.getElementById('view-attendance')&&document.getElementById('view-attendance').style.display!=='none')loadAttendance();
 }
 
+// ── Auto logout at 6:18 PM ──
+function _checkAutoLogout(){
+  if(!_attLoginTime)return;
+  var now=new Date();
+  var h=now.getHours(),m=now.getMinutes();
+  if(h>18||(h===18&&m>=18)){
+    console.log('Auto logout at 6:18 PM');
+    attendanceLogout();
+  }
+}
+
 // ── Live hours timer ──
 function _startAttTimer(){
   if(_attHoursTimer)clearInterval(_attHoursTimer);
   _updateActiveHoursDisplay();
-  _attHoursTimer=setInterval(_updateActiveHoursDisplay,1000); // refresh every 1 second
+  _checkAutoLogout();
+  _attHoursTimer=setInterval(function(){_updateActiveHoursDisplay();_checkAutoLogout();},1000);
 }
 
 function _updateActiveHoursDisplay(){
