@@ -1787,55 +1787,71 @@ function paSpeakTxt(txt){
 }
 var paRP={
   'this month summary':function(){
-    var tasks=window.db?window.db.tasks:[];
-    var total=tasks.length;
-    var done=tasks.filter(function(t){return t.done===true;}).length;
-    var pending=tasks.filter(function(t){return t.done!==true;}).length;
+    var now=new Date();var month=now.getMonth();var year=now.getFullYear();
+    var allTasks=window.db?window.db.tasks:[];
+    var tasks=allTasks.filter(function(t){var d=new Date(t.createdAt||t.dueDate||'');return d.getMonth()===month&&d.getFullYear()===year;});
+    var done=tasks.filter(function(t){return t.done;}).length;
+    var pending=tasks.filter(function(t){return !t.done&&!(window.isOverdue&&window.isOverdue(t));}).length;
     var over=tasks.filter(function(t){return window.isOverdue&&window.isOverdue(t);}).length;
-    var field=tasks.filter(function(t){return t.isField===true;}).length;
-    var pct=total?Math.round(done/total*100):0;
-    var top='No data';
-    if(window.db&&window.db.members&&window.db.members.length){
-      var best=window.db.members.reduce(function(a,m){
-        var c=tasks.filter(function(t){return t.ownerId===m.id&&t.done===true;}).length;
-        return c>(a.c||0)?{n:m.name,c:c}:a;
-      },{});
-      if(best.n)top=best.n;
-    }
-    return{t:'Here is your summary:',c:[
-      {l:'Total Tasks',v:total,s:'pbl'},
-      {l:'Completed',v:done+' ('+pct+'%)',s:'pg'},
+    var monthName=now.toLocaleString('en-IN',{month:'long'});
+    var rows=[
+      {l:'Total Tasks',v:tasks.length,s:'pbl'},
+      {l:'Completed',v:done,s:'pg'},
       {l:'Pending',v:pending,s:'po'},
-      {l:'Overdue',v:over,s:'pr'},
-      {l:'Field Jobs',v:field,s:'pbl'},
-      {l:'Top Performer',v:top,s:'pg'}
-    ]};
+      {l:'Overdue',v:over,s:'pr'}
+    ];
+    var members=window.db?window.db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer';}):[];
+    members.forEach(function(m){
+      var mTasks=tasks.filter(function(t){return t.ownerId===m.id;});
+      if(mTasks.length){
+        var mDone=mTasks.filter(function(t){return t.done;}).length;
+        rows.push({l:m.name,v:mDone+'/'+mTasks.length+' done',s:mDone===mTasks.length?'pg':'po'});
+      }
+    });
+    return{t:'📊 <strong>'+monthName+'</strong> summary:',c:rows};
   },
   'pending tasks':function(){
-    var tasks=window.db?window.db.tasks.filter(function(t){return t.done!==true;}).slice(0,5):[];
+    var tasks=window.db?window.db.tasks.filter(function(t){return !t.done&&!(window.isOverdue&&window.isOverdue(t));}):[];
     if(!tasks.length)return{t:'No pending tasks! All clear. ✅',c:[]};
-    var rows=tasks.map(function(t){
+    var rows=tasks.slice(0,6).map(function(t){
       var o=window.getMember?window.getMember(t.ownerId):{name:'Unknown'};
-      return{l:t.title.slice(0,26)+(t.title.length>26?'..':''),v:o.name,s:'po'};
+      var due=t.dueDate?(' · '+new Date(t.dueDate+'T12:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'})):'';
+      return{l:(t.title.slice(0,22)+(t.title.length>22?'..':'')),v:o.name+due,s:'po'};
     });
-    return{t:'<strong>'+tasks.length+'</strong> pending task'+(tasks.length!==1?'s':'')+':', c:rows};
+    return{t:'⏳ <strong>'+tasks.length+'</strong> pending task'+(tasks.length!==1?'s':'')+':', c:rows};
   },
   'who is online':function(){
-    var members=window.db?window.db.members:[];
+    var members=window.db?window.db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer';}):[];
     if(!members.length)return{t:'No team members found.',c:[]};
+    var today=new Date().toISOString().slice(0,10);
     var rows=members.map(function(m){
-      var on=window.isOnline&&window.isOnline(m.id);
-      return{l:on?'🟢 Online':'⚫ Offline',v:m.name,s:on?'pg':'po'};
+      var sessKey='att_sess_'+m.id+'_'+today;
+      var loginKey='att_login_'+m.id+'_'+today;
+      var totalKey='att_total_'+m.id+'_'+today;
+      var activeSess=localStorage.getItem(sessKey);
+      var firstLogin=localStorage.getItem(loginKey);
+      var totalHrs=parseFloat(localStorage.getItem(totalKey)||0);
+      var loginTime=firstLogin?new Date(firstLogin).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
+      if(activeSess){
+        var hrs=totalHrs+Math.max(0,(Date.now()-new Date(activeSess))/3600000);
+        var h=Math.floor(hrs);var mn=Math.round((hrs%1)*60);
+        return{l:m.name,v:'🟢 Active · Login: '+loginTime+' · '+h+'h '+mn+'m',s:'pg'};
+      } else if(firstLogin){
+        var h2=Math.floor(totalHrs);var mn2=Math.round((totalHrs%1)*60);
+        return{l:m.name,v:'🔵 Logged Out · Login: '+loginTime+' · '+h2+'h '+mn2+'m',s:'po'};
+      }
+      return{l:m.name,v:'⚫ Absent today',s:'pr'};
     });
-    var onlineCount=rows.filter(function(r){return r.l==='🟢 Online';}).length;
-    return{t:'<strong>'+onlineCount+'</strong> member'+(onlineCount!==1?'s':'')+' online now:',c:rows};
+    var onlineCount=rows.filter(function(r){return r.v.startsWith('🟢');}).length;
+    return{t:'👥 Team status — <strong>'+onlineCount+' active</strong> now:',c:rows};
   },
   'overdue tasks':function(){
-    var tasks=window.db?window.db.tasks.filter(function(t){return window.isOverdue&&window.isOverdue(t);}).slice(0,5):[];
+    var tasks=window.db?window.db.tasks.filter(function(t){return window.isOverdue&&window.isOverdue(t);}):[];
     if(!tasks.length)return{t:'No overdue tasks! Everything on time. ✅',c:[]};
-    var rows=tasks.map(function(t){
+    var rows=tasks.slice(0,6).map(function(t){
       var o=window.getMember?window.getMember(t.ownerId):{name:'Unknown'};
-      return{l:t.title.slice(0,26)+(t.title.length>26?'..':''),v:o.name,s:'pr'};
+      var due=t.dueDate?new Date(t.dueDate+'T12:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'No date';
+      return{l:(t.title.slice(0,22)+(t.title.length>22?'..':'')),v:o.name+' · Was due '+due,s:'pr'};
     });
     return{t:'⚠️ <strong>'+tasks.length+'</strong> overdue task'+(tasks.length!==1?'s':'')+':', c:rows};
   }
