@@ -2120,19 +2120,21 @@ async function attendanceLogout(){
   var newTotal=prevHours+sessHours;
   localStorage.setItem(totalKey,newTotal.toFixed(4)); // persist accumulated total
 
+  // Read IDs before clearing
+  var supaId=localStorage.getItem('att_supa_id');
+  var sessionId=localStorage.getItem('att_session_id');
+
   // Remove active session marker (keep att_login_ so day record stays)
   localStorage.removeItem(sessKey);
   localStorage.removeItem('att_member_id');
   localStorage.removeItem('att_login_time');
   localStorage.removeItem('att_supa_id');
-
-  // Sync logout to backend
-  var sessionId=localStorage.getItem('att_session_id');
-  if(sessionId)AttendanceAPI.markLogout(memberId,sessionId).catch(function(){});
   localStorage.removeItem('att_session_id');
 
+  // Sync logout to backend
+  if(sessionId)AttendanceAPI.markLogout(memberId,sessionId).catch(function(){});
+
   // Sync accumulated total to Supabase
-  var supaId=localStorage.getItem('att_supa_id');
   _getAttSupa().then(function(supa){
     if(!supa)return;
     var update={logout_time:now.toISOString(),total_hours:parseFloat(newTotal.toFixed(2)),session_start:null};
