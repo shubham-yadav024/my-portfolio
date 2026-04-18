@@ -2084,12 +2084,18 @@ async function _attSyncToSupa(memberId,today,loginTime,currentSessStart,memberNa
     if(!supa)return;
     if(!memberName)memberName=(currentUser&&(currentUser.name||currentUser.username))||'';
     // Try finding by member_id first, then by member_name (handles legacy/mismatched IDs)
-    var ex=await supa.from('attendance').select('id').eq('member_id',memberId).eq('date',today).maybeSingle();
+    var ex=await supa.from('attendance').select('id,total_hours').eq('member_id',memberId).eq('date',today).maybeSingle();
     if((!ex||!ex.data)&&memberName){
-      ex=await supa.from('attendance').select('id').eq('date',today).ilike('member_name',memberName).maybeSingle();
+      ex=await supa.from('attendance').select('id,total_hours').eq('date',today).ilike('member_name',memberName).maybeSingle();
     }
     if(ex&&ex.data){
       localStorage.setItem('att_supa_id',ex.data.id);
+      // Sync total_hours from Supabase → localStorage so multi-device sessions accumulate correctly
+      var supaTotal=parseFloat(ex.data.total_hours||0);
+      var totalKey='att_total_'+memberId+'_'+today;
+      var localTotal=parseFloat(localStorage.getItem(totalKey)||0);
+      if(supaTotal>localTotal)localStorage.setItem(totalKey,supaTotal.toFixed(4));
+      _attPrevHours=parseFloat(localStorage.getItem(totalKey)||0);
       // New session — clear logout_time, update session_start, fix member_id if needed
       var sessStart=currentSessStart||loginTime;
       supa.from('attendance').update({logout_time:null,session_start:sessStart,member_id:memberId,member_name:memberName}).eq('id',ex.data.id).then(function(){}).catch(function(){});
@@ -2540,20 +2546,41 @@ async function loadAttendance(){
 function _startAttPanelRefresh(){
   _stopAttPanelRefresh();
   _attPanelRefreshTick(); // immediate first tick
-  _attPanelTimer=setInterval(_attPanelRefreshTick,3000);
+  _attPanelTimer=setInterval(_attPanelRefreshTick,1000);
 }
 function _stopAttPanelRefresh(){
   if(_attPanelTimer){clearInterval(_attPanelTimer);_attPanelTimer=null;}
 }
+var _attAutoLogoutDone=new Set(); // track records already auto-logged-out to avoid repeat updates
 async function _attPanelRefreshTick(){
   var attView=document.getElementById('view-attendance');
   if(!attView||attView.style.display==='none')return;
-  var today=new Date().toISOString().slice(0,10);
+  var now=new Date();
+  var today=now.toISOString().slice(0,10);
   var supa=await _getAttSupa();
   if(!supa)return;
   var res=await supa.from('attendance').select('*').eq('date',today);
   if(!res||!res.data||!res.data.length)return;
-  var supaData=res.data;
+  // Filter out admin records from Supabase data before merging
+  var _adminSkip=['ashish yadav','pravin bidaye','ashish'];
+  var supaData=res.data.filter(function(r){
+    return !_adminSkip.some(function(n){return(r.member_name||'').toLowerCase().includes(n);});
+  });
+  // Auto-logout past 6:15 PM — update Supabase once per record per session
+  var pastAutoLogout=now.getHours()>18||(now.getHours()===18&&now.getMinutes()>=15);
+  if(pastAutoLogout){
+    supaData.forEach(function(rec){
+      if(!rec.logout_time&&rec.id&&!_attAutoLogoutDone.has(rec.id)){
+        _attAutoLogoutDone.add(rec.id);
+        var autoTime=new Date(today+'T18:15:00');
+        var activeSess=rec.session_start||rec.login_time;
+        var addedHrs=activeSess?Math.max(0,(autoTime-new Date(activeSess))/3600000):0;
+        var newTotal=parseFloat(((rec.total_hours||0)+addedHrs).toFixed(2));
+        supa.from('attendance').update({logout_time:autoTime.toISOString(),total_hours:newTotal,session_start:null}).eq('id',rec.id).then(function(){}).catch(function(){});
+        rec.logout_time=autoTime.toISOString();rec.total_hours=newTotal;rec.session_start=null;
+      }
+    });
+  }
   // Merge with members list (exclude admins/reviewers)
   var merged=db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer';}).map(function(m){
     var rec=supaData.find(function(r){return r.member_id===m.id||_attNameMatch(r.member_name,m.name);});
