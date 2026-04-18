@@ -2164,8 +2164,7 @@ function _checkAutoLogout(){
   if(!_attLoginTime)return;
   var now=new Date();
   var h=now.getHours(),m=now.getMinutes();
-  if(h>18||(h===18&&m>=18)){
-    console.log('Auto logout at 6:18 PM');
+  if(h>18||(h===18&&m>=15)){
     attendanceLogout();
   }
 }
