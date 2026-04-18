@@ -2680,8 +2680,18 @@ let db=JSON.parse(localStorage.getItem('tfp2_db')||'null')||{
   users:[{id:'u0',username:'admin',password:'admin123',name:'Admin',role:'admin',memberId:null}]
 };
 function saveDB(){localStorage.setItem('tfp2_db',JSON.stringify(db));window.db=db;}
-// Fix legacy member names in localStorage
-(function(){var fixes={'Vijay .B. Tawade':'Vijay B Tawade','MR K Suresh':'Mr K Suresh'};var changed=false;db.members.forEach(function(m){if(fixes[m.name]){m.name=fixes[m.name];changed=true;}});if(changed)saveDB();})();
+// Fix legacy member names + mark Ashish & Pravin as admin (exclude from attendance)
+(function(){
+  var namefix={'Vijay .B. Tawade':'Vijay B Tawade','MR K Suresh':'Mr K Suresh'};
+  var adminNames=['ashish yadav','pravin bidaye','ashish','pravin'];
+  var changed=false;
+  db.members.forEach(function(m){
+    if(namefix[m.name]){m.name=namefix[m.name];changed=true;}
+    var ln=(m.name||'').toLowerCase();
+    if(adminNames.some(function(a){return ln.includes(a);})){m.role='admin';changed=true;}
+  });
+  if(changed)saveDB();
+})();
 // Expose globals for Pushp Assistant (runs in separate IIFE scope)
 window.TasksAPI=TasksAPI;
 window.isOverdue=isOverdue;
