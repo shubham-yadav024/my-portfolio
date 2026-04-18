@@ -523,6 +523,26 @@ textarea.fctl{resize:vertical;min-height:65px;}
         <!-- Employee dashboard -->
         <div id="emp-dash-stats" style="display:none">
           <div id="emp-welcome-wrap"></div>
+
+          <!-- My Attendance Card -->
+          <div id="emp-att-card" style="background:linear-gradient(135deg,rgba(46,125,50,0.10),rgba(38,198,218,0.06));border:1px solid rgba(46,204,138,0.25);border-radius:var(--radius-lg);padding:1.1rem 1.4rem;margin-bottom:1.25rem">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--text3);margin-bottom:10px">📅 Today's Attendance</div>
+            <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+              <div style="flex:1;min-width:120px">
+                <div style="font-size:11px;color:var(--text3);margin-bottom:3px">First Login</div>
+                <div style="font-size:18px;font-weight:700;font-family:var(--font-head);color:var(--text)" id="emp-att-login">—</div>
+              </div>
+              <div style="flex:1;min-width:120px">
+                <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Hours Worked</div>
+                <div style="font-size:28px;font-weight:800;font-family:var(--font-head);color:var(--green);line-height:1" id="emp-att-hours">0h 0m</div>
+              </div>
+              <div style="flex:1;min-width:120px">
+                <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Status</div>
+                <div id="emp-att-status" style="display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;background:var(--red-bg);color:var(--red)">❌ Not Logged In</div>
+              </div>
+            </div>
+          </div>
+
           <div class="sgrid" style="grid-template-columns:repeat(3,1fr)">
             <div class="scard"><div class="sl">My Tasks</div><div class="sv" id="emp-ds-total">0</div><div class="ss">assigned to me</div></div>
             <div class="scard green"><div class="sl">Completed</div><div class="sv" id="emp-ds-done">0</div><div class="ss" id="emp-ds-pct">0% rate</div></div>
@@ -2110,7 +2130,7 @@ async function attendanceLogout(){
 
   _attLoginTime=null;
   _attPrevHours=newTotal;
-  _updateSessionCard();
+  _updateSessionCard();_updateEmpAttCard();
   if(document.getElementById('view-attendance')&&document.getElementById('view-attendance').style.display!=='none')loadAttendance();
 }
 
@@ -2156,6 +2176,38 @@ function _updateActiveHoursDisplay(){
     var m=Math.floor((ms%3600000)/60000);
     span.textContent=(h>0?h+'h ':'')+m+'m';
   });
+  // Update employee dashboard attendance card
+  _updateEmpAttCard();
+}
+
+function _updateEmpAttCard(){
+  var card=document.getElementById('emp-att-card');
+  if(!card)return;
+  var today=new Date().toISOString().slice(0,10);
+  var memberId=currentUser&&(currentUser.memberId||currentUser.id);
+  if(!memberId)return;
+  var firstLoginKey='att_login_'+memberId+'_'+today;
+  var sessKey='att_sess_'+memberId+'_'+today;
+  var totalKey='att_total_'+memberId+'_'+today;
+  var firstLogin=localStorage.getItem(firstLoginKey);
+  var activeSess=localStorage.getItem(sessKey);
+  var prevHours=parseFloat(localStorage.getItem(totalKey)||0);
+  // Login time display
+  var loginEl=document.getElementById('emp-att-login');
+  if(loginEl)loginEl.textContent=firstLogin?new Date(firstLogin).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
+  // Hours display
+  var hours=prevHours;
+  if(activeSess)hours+=Math.max(0,(Date.now()-new Date(activeSess))/3600000);
+  var h=Math.floor(hours);var m=Math.round((hours%1)*60);
+  var hoursEl=document.getElementById('emp-att-hours');
+  if(hoursEl)hoursEl.textContent=(h>0?h+'h ':'')+m+'m';
+  // Status
+  var statusEl=document.getElementById('emp-att-status');
+  if(statusEl){
+    if(activeSess){statusEl.innerHTML='<span style="width:7px;height:7px;border-radius:50%;background:#2ecc8a;animation:pulse-dot 1.4s infinite;display:inline-block"></span> Active';statusEl.style.cssText='display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;background:var(--green-bg);color:var(--green)';}
+    else if(firstLogin){statusEl.innerHTML='🔵 Logged Out';statusEl.style.cssText='display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;background:var(--blue-bg);color:var(--blue)';}
+    else{statusEl.innerHTML='❌ Not Logged In';statusEl.style.cssText='display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;background:var(--red-bg);color:var(--red)';}
+  }
 }
 
 function _updateSessionCard(){
