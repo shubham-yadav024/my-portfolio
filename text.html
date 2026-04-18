@@ -3030,6 +3030,7 @@ function renderTaskItem(task,compact){
         ${fj&&fj.site?`<span class="tmeta">📍 ${fj.site}</span>`:''}
         ${task.escalation&&task.escalation.length?`<span class="tmeta" style="color:var(--pink)">🔺 ${task.escalation.length} escalation${task.escalation.length>1?'s':''}</span>`:''}
       </div>
+      ${task.desc?`<div style="font-size:13px;color:var(--text2);margin-top:5px;line-height:1.5;padding:6px 8px;background:var(--bg3);border-radius:6px;border-left:3px solid var(--border2)">${task.desc}</div>`:''}
       ${task.isField&&fj?`<div class="field-card"><div class="field-card-head">📍 Field Job Details</div><div class="field-grid">
         ${fj.site?`<div class="field-row"><span class="field-lbl">Site</span><span class="field-val">${fj.site}</span></div>`:''}
         ${fj.address?`<div class="field-row"><span class="field-lbl">Address</span><span class="field-val">${fj.address}</span></div>`:''}
