@@ -1796,7 +1796,7 @@ var paRP={
     var pending=tasks.filter(function(t){return !t.done;}).length;
     var over=tasks.filter(function(t){return window.isOverdue&&window.isOverdue(t);}).length;
     var rows=[{l:'Total Tasks',v:tasks.length,s:'pbl'},{l:'Completed',v:done,s:'pg'},{l:'Pending',v:pending,s:'po'},{l:'Overdue',v:over,s:'pr'}];
-    var members=window.db?window.db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer';}):[];
+    var members=window.db?window.db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer'&&!['ashish yadav','pravin bidaye'].some(function(n){return(m.name||'').toLowerCase().includes(n);});}):[];
     members.forEach(function(m){
       var mt=tasks.filter(function(t){return t.ownerId===m.id||t.owner_id===m.id;});
       if(mt.length){var md=mt.filter(function(t){return t.done;}).length;rows.push({l:m.name,v:md+'/'+mt.length+' done',s:md===mt.length?'pg':'po'});}
@@ -1816,7 +1816,7 @@ var paRP={
     return{t:'⏳ <strong>'+tasks.length+'</strong> pending:',c:rows};
   },
   'who is online':async function(){
-    var members=window.db?window.db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer';}):[];
+    var members=window.db?window.db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer'&&!['ashish yadav','pravin bidaye'].some(function(n){return(m.name||'').toLowerCase().includes(n);});}):[];
     if(!members.length)return{t:'No team members found.',c:[]};
     var today=new Date().toISOString().slice(0,10);
     var attRows=[];
@@ -2392,7 +2392,7 @@ async function loadAttendance(){
 
   // ── Build today's attendance from localStorage + members list ──
   function _buildLocalSummary(){
-    return db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer';}).map(function(m){
+    return db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer'&&!['ashish yadav','pravin bidaye'].some(function(n){return(m.name||'').toLowerCase().includes(n);});}).map(function(m){
       var id=m.id;
       var firstLoginKey='att_login_'+id+'_'+today;
       var sessKey='att_sess_'+id+'_'+today;
@@ -2463,7 +2463,7 @@ async function loadAttendance(){
   // Step 3: Try Supabase summary (async, update if successful)
   _loadAttFromSupa(today).then(function(supaData){
     if(supaData&&supaData.length>0){
-      var merged=db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer';}).map(function(m){
+      var merged=db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer'&&!['ashish yadav','pravin bidaye'].some(function(n){return(m.name||'').toLowerCase().includes(n);});}).map(function(m){
         var rec=supaData.find(function(r){return r.member_id===m.id||_attNameMatch(r.member_name,m.name);});
         if(!rec)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:0};
         var hours=rec.total_hours||0;
@@ -2582,7 +2582,7 @@ async function _attPanelRefreshTick(){
     });
   }
   // Merge with members list (exclude admins/reviewers)
-  var merged=db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer';}).map(function(m){
+  var merged=db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer'&&!['ashish yadav','pravin bidaye'].some(function(n){return(m.name||'').toLowerCase().includes(n);});}).map(function(m){
     var rec=supaData.find(function(r){return r.member_id===m.id||_attNameMatch(r.member_name,m.name);});
     if(!rec)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:'0.0'};
     var hours=rec.total_hours||0;
