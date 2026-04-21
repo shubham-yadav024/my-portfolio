@@ -2711,7 +2711,7 @@ async function syncFromDB(){
     const membersRes=await MembersAPI.getAll();
     if(membersRes?.success){db.members=membersRes.members.map(m=>({id:m.id,name:m.name,role:m.role,phone:m.phone||'',email:m.email||'',color:m.color,type:m.type}));}
     const tasksRes=await TasksAPI.getAll();
-    if(tasksRes?.success){db.tasks=tasksRes.tasks.map(t=>({id:t.id,title:t.title,description:t.description,ownerId:t.owner_id,status:t.status,priority:t.priority,category:t.category,dueDate:t.due_date,dueTime:t.due_time,done:t.done,escalated:t.escalated,isField:t.is_field,fieldJob:t.field_job,escalation:t.escalation||[],createdAt:t.created_at}));}
+    if(tasksRes?.success){db.tasks=tasksRes.tasks.map(t=>({id:t.id,title:t.title,desc:t.description,ownerId:t.owner_id,status:t.status,priority:t.priority,category:t.category,project:t.project||'',dueDate:t.due_date,dueTime:t.due_time,done:t.done,escalated:t.escalated,isField:t.is_field,fieldJob:t.field_job,escalation:t.escalation||[],createdAt:t.created_at}));}
     const actRes=await ActivityAPI.getAll(30);
     if(actRes?.success){db.activity=actRes.activities.map(a=>({id:a.id,msg:a.msg,type:a.type,time:a.created_at}));}
     if(typeof renderAll==='function')renderAll();
