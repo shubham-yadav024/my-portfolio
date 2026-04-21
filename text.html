@@ -873,6 +873,15 @@ textarea.fctl{resize:vertical;min-height:65px;}
             <option value="low">🟢 Low</option>
           </select>
         </div>
+        <div class="fg"><label class="flbl">Project / Client</label>
+          <select class="fctl" id="f-project">
+            <option value="">— Select Project —</option>
+            <option value="ADANI">ADANI</option>
+            <option value="BMC">BMC</option>
+            <option value="BHEL">BHEL</option>
+            <option value="PWD">PWD</option>
+          </select>
+        </div>
         <div class="fg"><label class="flbl">Category</label>
           <select class="fctl" id="f-category">
             <option>Work</option><option>Sales</option><option>Operations</option>
@@ -3053,7 +3062,7 @@ function openAddTask(forceField){
   editingId=null;document.getElementById('modal-title').textContent='New Task';document.getElementById('edit-id').value='';
   ['f-title','f-desc','f-site','f-address','f-customer','f-cphone','f-cmanager','f-cmanagerphone','f-sitenotes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('f-priority').value='medium';document.getElementById('f-date').value=new Date().toISOString().split('T')[0];
-  document.getElementById('f-time').value='';document.getElementById('f-category').value=forceField?'Field Service':'Work';
+  document.getElementById('f-time').value='';document.getElementById('f-project').value='';document.getElementById('f-category').value=forceField?'Field Service':'Work';
   document.getElementById('f-repeat').value='none';document.getElementById('f-visitdate').value='';document.getElementById('f-visittime').value='';
   document.getElementById('f-isfield').checked=!!forceField;document.getElementById('field-fields').style.display=forceField?'block':'none';
   document.querySelectorAll('#ntogs .ntog').forEach(t=>t.classList.toggle('on',t.dataset.n==='browser'));
@@ -3078,7 +3087,7 @@ function openEditTask(id){
   editingId=id;document.getElementById('modal-title').textContent='Edit Task';document.getElementById('edit-id').value=id;
   document.getElementById('f-title').value=t.title;document.getElementById('f-desc').value=t.desc||'';
   document.getElementById('f-priority').value=t.priority;document.getElementById('f-date').value=t.dueDate||'';
-  document.getElementById('f-time').value=t.dueTime||'';document.getElementById('f-category').value=t.category||'Work';document.getElementById('f-repeat').value=t.repeat||'none';
+  document.getElementById('f-time').value=t.dueTime||'';document.getElementById('f-project').value=t.project||'';document.getElementById('f-category').value=t.category||'Work';document.getElementById('f-repeat').value=t.repeat||'none';
   const fj=t.fieldJob||{};
   document.getElementById('f-isfield').checked=!!t.isField;document.getElementById('field-fields').style.display=t.isField?'block':'none';
   document.getElementById('f-site').value=fj.site||'';document.getElementById('f-address').value=fj.address||'';
@@ -3124,7 +3133,8 @@ async function saveTask(){
   const isField=document.getElementById('f-isfield').checked;
   const fieldJob=isField?{site:document.getElementById('f-site').value.trim(),address:document.getElementById('f-address').value.trim(),customer:document.getElementById('f-customer').value.trim(),cphone:document.getElementById('f-cphone').value.trim(),cmanager:document.getElementById('f-cmanager').value.trim(),cmanagerphone:document.getElementById('f-cmanagerphone').value.trim(),visitDate:document.getElementById('f-visitdate').value,visitTime:document.getElementById('f-visittime').value,siteNotes:document.getElementById('f-sitenotes').value.trim()}:null;
   const repId=document.getElementById('f-rep').value||null;
-  const localTask={id:editingId||uid(),title,desc:document.getElementById('f-desc').value.trim(),ownerId,repId,priority:document.getElementById('f-priority').value,dueDate:document.getElementById('f-date').value,dueTime:document.getElementById('f-time').value,category:document.getElementById('f-category').value,repeat:document.getElementById('f-repeat').value,notifs,escalation,isField,fieldJob,done:false,escalated:false,createdAt:editingId?(db.tasks.find(x=>x.id===editingId)||{}).createdAt||now():now(),updatedAt:now()};
+  const project=document.getElementById('f-project').value||'';
+  const localTask={id:editingId||uid(),title,desc:document.getElementById('f-desc').value.trim(),ownerId,repId,priority:document.getElementById('f-priority').value,dueDate:document.getElementById('f-date').value,dueTime:document.getElementById('f-time').value,category:document.getElementById('f-category').value,project,repeat:document.getElementById('f-repeat').value,notifs,escalation,isField,fieldJob,done:false,escalated:false,createdAt:editingId?(db.tasks.find(x=>x.id===editingId)||{}).createdAt||now():now(),updatedAt:now()};
   if(editingId){
     const idx=db.tasks.findIndex(x=>x.id===editingId);localTask.done=db.tasks[idx]?.done||false;localTask.escalated=db.tasks[idx]?.escalated||false;
     db.tasks[idx]=localTask;log('Task "'+title+'" updated');toast('Task updated');
@@ -3169,6 +3179,7 @@ function renderTaskItem(task,compact){
         ${getStatusBadge(task)}
         <span class="badge badge-${task.priority}">${pLabels[task.priority]}</span>
         ${task.isField?'<span class="badge badge-field">📍 Field</span>':''}
+        ${task.project?`<span class="badge" style="background:rgba(99,102,241,0.15);color:#a5b4fc;font-weight:700">${task.project}</span>`:''}
         ${task.category?`<span class="badge" style="background:var(--bg3);color:var(--text3)">${task.category}</span>`:''}
       </div>
       <div class="trow2">
