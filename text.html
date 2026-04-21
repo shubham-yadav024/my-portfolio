@@ -939,6 +939,46 @@ textarea.fctl{resize:vertical;min-height:65px;}
   </div>
 </div>
 
+<!-- MEMBER DETAIL MODAL -->
+<div class="moverlay" id="member-detail-modal" onclick="if(event.target===this)closeModal('member-detail-modal')">
+  <div class="modal" style="max-width:600px">
+    <div class="mhead">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div id="mdm-avatar" class="oavatar" style="width:42px;height:42px;font-size:15px;flex-shrink:0"></div>
+        <div>
+          <h2 id="mdm-name" style="margin:0"></h2>
+          <div id="mdm-role" style="font-size:12px;color:var(--text3);margin-top:2px"></div>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('member-detail-modal')">✕</button>
+    </div>
+    <div class="mbody">
+      <!-- Stats row -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.25rem">
+        <div style="background:var(--bg2);border-radius:10px;padding:14px;text-align:center">
+          <div id="mdm-total" style="font-size:22px;font-weight:700"></div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Total</div>
+        </div>
+        <div style="background:var(--bg2);border-radius:10px;padding:14px;text-align:center">
+          <div id="mdm-done" style="font-size:22px;font-weight:700;color:var(--green)"></div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Completed</div>
+        </div>
+        <div style="background:var(--bg2);border-radius:10px;padding:14px;text-align:center">
+          <div id="mdm-pending" style="font-size:22px;font-weight:700;color:var(--amber)"></div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Pending</div>
+        </div>
+        <div style="background:var(--bg2);border-radius:10px;padding:14px;text-align:center">
+          <div id="mdm-overdue" style="font-size:22px;font-weight:700;color:var(--red)"></div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Overdue</div>
+        </div>
+      </div>
+      <!-- Task list -->
+      <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Tasks</div>
+      <div id="mdm-tasks" style="display:flex;flex-direction:column;gap:8px;max-height:380px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
 <!-- MEMBER MODAL -->
 <div class="moverlay" id="member-modal">
   <div class="modal" style="max-width:440px">
@@ -3335,16 +3375,49 @@ function drawDonut(done,pend,over,field,total){
   if(!total)html+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="${sw}"/>`;
   svg.innerHTML=html;
 }
+function openMemberDetail(id){
+  var m=db.members.find(function(x){return x.id===id;});
+  if(!m)return;
+  var mt=db.tasks.filter(function(t){return t.ownerId===id;});
+  var done=mt.filter(function(t){return t.done;});
+  var pending=mt.filter(function(t){return !t.done&&!isOverdue(t);});
+  var overdue=mt.filter(function(t){return !t.done&&isOverdue(t);});
+  document.getElementById('mdm-avatar').style.background=m.color||'#666';
+  document.getElementById('mdm-avatar').textContent=initials(m.name);
+  document.getElementById('mdm-name').textContent=m.name;
+  document.getElementById('mdm-role').textContent=(m.role||'Team Member')+(m.type?' · '+({office:'Office',field:'Field',both:'Office+Field'}[m.type]||m.type):'');
+  document.getElementById('mdm-total').textContent=mt.length;
+  document.getElementById('mdm-done').textContent=done.length;
+  document.getElementById('mdm-pending').textContent=pending.length;
+  document.getElementById('mdm-overdue').textContent=overdue.length;
+  var statusOrder=['overdue','pending','done'];
+  var tagged=mt.map(function(t){return{t:t,s:t.done?'done':isOverdue(t)?'overdue':'pending'};});
+  tagged.sort(function(a,b){return statusOrder.indexOf(a.s)-statusOrder.indexOf(b.s);});
+  document.getElementById('mdm-tasks').innerHTML=tagged.length?tagged.map(function(x){
+    var t=x.t,s=x.s;
+    var sColor=s==='done'?'var(--green)':s==='overdue'?'var(--red)':'var(--amber)';
+    var sLabel=s==='done'?'✅ Done':s==='overdue'?'🔴 Overdue':'🟡 Pending';
+    var due=t.dueDate?new Date(t.dueDate).toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'No due date';
+    return`<div style="background:var(--bg2);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.title||'Untitled'}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${due}${t.isField?' · Field':''}</div>
+      </div>
+      <span style="font-size:11px;font-weight:600;color:${sColor};white-space:nowrap">${sLabel}</span>
+    </div>`;
+  }).join(''):'<div style="color:var(--text3);font-size:13px;padding:8px">No tasks assigned</div>';
+  openModal('member-detail-modal');
+}
 function renderTeam(){
   document.getElementById('team-grid').innerHTML=db.members.map(m=>{
     const mt=db.tasks.filter(t=>t.ownerId===m.id),md=mt.filter(t=>t.done).length,me=mt.filter(t=>t.escalated).length,mf=mt.filter(t=>t.isField).length,pct=mt.length?Math.round(md/mt.length*100):0;
     const typeColors={office:'var(--blue)',field:'var(--teal)',both:'var(--accent)'};
     const typeLabels={office:'Office',field:'Field',both:'Office + Field'};
     const online=isOnline(m.id);
-    return`<div class="tc">
+    return`<div class="tc" onclick="openMemberDetail('${m.id}')" style="cursor:pointer">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
         <div class="tc-av" style="background:${m.color}">${initials(m.name)}</div>
-        <button class="ibtn del" onclick="deleteMember('${m.id}')" title="Remove" style="font-size:12px;opacity:.5">🗑</button>
+        <button class="ibtn del" onclick="event.stopPropagation();deleteMember('${m.id}')" title="Remove" style="font-size:12px;opacity:.5">🗑</button>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
         <div class="tc-name" style="margin-bottom:0">${m.name}</div>
