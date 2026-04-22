@@ -2717,7 +2717,7 @@ async function syncFromDB(){
     if(typeof renderAll==='function')renderAll();
   }catch(err){}
 }
-document.addEventListener('DOMContentLoaded',()=>{if(AuthAPI.isLoggedIn()){syncFromDB();setInterval(syncFromDB,5000);}});
+document.addEventListener('DOMContentLoaded',()=>{if(AuthAPI.isLoggedIn()){syncFromDB();setInterval(syncFromDB,5000);setInterval(function(){if(typeof renderTaskList==='function')renderTaskList();if(typeof renderDashboard==='function')renderDashboard();},1000);}});
 
 // ═══ PRESENCE ═══
 let presenceChannel=null;let onlineUserIds=new Set();
@@ -2915,7 +2915,9 @@ function launchApp(){
   const dot=document.getElementById('webhook-status-dot');
   if(dot){if(cfg.url){dot.textContent='✅ Webhook active';dot.style.color='var(--green)';}else{dot.textContent='Not configured';dot.style.color='var(--text3)';}}
   renderDashboard();updateBadges();scheduleAll();
-  syncFromDB();setInterval(syncFromDB,5000);
+  syncFromDB();
+  setInterval(syncFromDB,5000); // backend fetch every 5s
+  setInterval(function(){if(typeof renderTaskList==='function')renderTaskList();if(typeof renderDashboard==='function')renderDashboard();},1000); // UI re-render every 1s
   initPresence();
 }
 
