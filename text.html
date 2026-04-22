@@ -2709,7 +2709,15 @@ async function syncFromDB(){
   if(!AuthAPI.isLoggedIn())return;
   try{
     const membersRes=await MembersAPI.getAll();
-    if(membersRes?.success){db.members=membersRes.members.map(m=>({id:m.id,name:m.name,role:m.role,phone:m.phone||'',email:m.email||'',color:m.color,type:m.type}));}
+    if(membersRes?.success){
+      db.members=membersRes.members.map(m=>({id:m.id,name:m.name,role:m.role,phone:m.phone||'',email:m.email||'',color:m.color,type:m.type}));
+      // Ensure Manthan Mane exists in backend — add if missing
+      var _required=[{name:'Manthan Mane',role:'Site Supervisor',color:'#ab47bc',type:'field'}];
+      _required.forEach(function(req){
+        var exists=db.members.some(function(m){return(m.name||'').toLowerCase().includes(req.name.toLowerCase());});
+        if(!exists){MembersAPI.create({name:req.name,role:req.role,color:req.color,type:req.type,phone:'',email:''}).then(function(r){if(r&&r.success)syncFromDB();}).catch(function(){});}
+      });
+    }
     const tasksRes=await TasksAPI.getAll();
     if(tasksRes?.success){db.tasks=tasksRes.tasks.map(t=>({id:t.id,title:t.title,desc:t.description,ownerId:t.owner_id,status:t.status,priority:t.priority,category:t.category,project:t.project||'',dueDate:t.due_date,dueTime:t.due_time,done:t.done,escalated:t.escalated,isField:t.is_field,fieldJob:t.field_job,escalation:t.escalation||[],createdAt:t.created_at}));}
     const actRes=await ActivityAPI.getAll(30);
