@@ -898,7 +898,7 @@ textarea.fctl{resize:vertical;min-height:65px;}
           </select>
         </div>
       </div>
-      <div class="fgrid full"><div class="fg"><label class="flbl">Description</label><textarea class="fctl" id="f-desc" placeholder="Task details..."></textarea></div></div>
+      <div class="fgrid full"><div class="fg"><label class="flbl">Description</label><textarea class="fctl" id="f-desc" placeholder="Task details..." rows="5" style="min-height:110px;resize:vertical"></textarea></div></div>
       <div class="sdiv">Field Job Details</div>
       <div class="field-section">
         <div class="field-toggle-row" style="margin-bottom:12px">
@@ -2717,7 +2717,7 @@ async function syncFromDB(){
     if(typeof renderAll==='function')renderAll();
   }catch(err){}
 }
-document.addEventListener('DOMContentLoaded',()=>{if(AuthAPI.isLoggedIn()){syncFromDB();setInterval(syncFromDB,30000);}});
+document.addEventListener('DOMContentLoaded',()=>{if(AuthAPI.isLoggedIn()){syncFromDB();setInterval(syncFromDB,5000);}});
 
 // ═══ PRESENCE ═══
 let presenceChannel=null;let onlineUserIds=new Set();
@@ -2915,7 +2915,7 @@ function launchApp(){
   const dot=document.getElementById('webhook-status-dot');
   if(dot){if(cfg.url){dot.textContent='✅ Webhook active';dot.style.color='var(--green)';}else{dot.textContent='Not configured';dot.style.color='var(--text3)';}}
   renderDashboard();updateBadges();scheduleAll();
-  syncFromDB();setInterval(syncFromDB,30000);
+  syncFromDB();setInterval(syncFromDB,5000);
   initPresence();
 }
 
@@ -3200,7 +3200,7 @@ function renderTaskItem(task,compact){
         ${fj&&fj.site?`<span class="tmeta">📍 ${fj.site}</span>`:''}
         ${task.escalation&&task.escalation.length?`<span class="tmeta" style="color:var(--pink)">🔺 ${task.escalation.length} escalation${task.escalation.length>1?'s':''}</span>`:''}
       </div>
-      ${task.desc?`<div style="font-size:13px;color:var(--text2);margin-top:5px;line-height:1.5;padding:6px 8px;background:var(--bg3);border-radius:6px;border-left:3px solid var(--border2)">${task.desc}</div>`:''}
+      ${task.desc?`<div style="font-size:13px;color:var(--text2);margin-top:6px;line-height:1.6;padding:8px 12px;background:var(--bg3);border-radius:6px;border-left:3px solid var(--accent);white-space:pre-wrap;word-break:break-word">${task.desc}</div>`:''}
       ${task.isField&&fj?`<div class="field-card"><div class="field-card-head">📍 Field Job Details</div><div class="field-grid">
         ${fj.site?`<div class="field-row"><span class="field-lbl">Site</span><span class="field-val">${fj.site}</span></div>`:''}
         ${fj.address?`<div class="field-row"><span class="field-lbl">Address</span><span class="field-val">${fj.address}</span></div>`:''}
