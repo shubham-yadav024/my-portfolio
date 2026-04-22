@@ -3138,13 +3138,19 @@ async function saveTask(){
   const localTask={id:editingId||uid(),title,desc:document.getElementById('f-desc').value.trim(),ownerId,repId,priority:document.getElementById('f-priority').value,dueDate:document.getElementById('f-date').value,dueTime:document.getElementById('f-time').value,category:document.getElementById('f-category').value,project,repeat:document.getElementById('f-repeat').value,notifs,escalation,isField,fieldJob,done:false,escalated:false,createdAt:editingId?(db.tasks.find(x=>x.id===editingId)||{}).createdAt||now():now(),updatedAt:now()};
   if(editingId){
     const idx=db.tasks.findIndex(x=>x.id===editingId);localTask.done=db.tasks[idx]?.done||false;localTask.escalated=db.tasks[idx]?.escalated||false;
-    db.tasks[idx]=localTask;log('Task "'+title+'" updated');toast('Task updated');
-    try{await TasksAPI.update(editingId,{title,description:localTask.desc,owner_id:ownerId,priority:localTask.priority,due_date:localTask.dueDate||null,due_time:localTask.dueTime||null,category:localTask.category,is_field:isField,field_job:fieldJob,escalation,done:localTask.done});}catch(e){}
+    db.tasks[idx]=localTask;log('Task "'+title+'" updated');
   }else{
-    db.tasks.push(localTask);log('Task "'+title+'" assigned to '+getMember(ownerId).name+(isField?' [Field Job]':''));toast('Task created!');
-    try{const res=await TasksAPI.create({title,description:localTask.desc,owner_id:ownerId,rep_id:repId,priority:localTask.priority,due_date:localTask.dueDate||null,due_time:localTask.dueTime||null,category:localTask.category,is_field:isField,field_job:fieldJob,escalation,done:false,escalated:false});if(res&&res.success&&res.task){const tidx=db.tasks.findIndex(x=>x.id===localTask.id);if(tidx>=0)db.tasks[tidx].id=res.task.id;saveDB();}}catch(e){}
+    db.tasks.push(localTask);log('Task "'+title+'" assigned to '+getMember(ownerId).name+(isField?' [Field Job]':''));
   }
-  saveDB();scheduleAll();closeModal('task-modal');renderDashboard();renderTaskList();renderFieldJobs();renderEscalation();updateBadges();
+  // Show on screen immediately (optimistic UI) — don't wait for API
+  saveDB();closeModal('task-modal');toast(editingId?'Task updated':'Task created!');
+  renderDashboard();renderTaskList();renderFieldJobs();renderEscalation();updateBadges();scheduleAll();
+  // Sync to backend in background
+  if(editingId){
+    TasksAPI.update(editingId,{title,description:localTask.desc,owner_id:ownerId,priority:localTask.priority,due_date:localTask.dueDate||null,due_time:localTask.dueTime||null,category:localTask.category,is_field:isField,field_job:fieldJob,escalation,done:localTask.done}).catch(function(){});
+  }else{
+    TasksAPI.create({title,description:localTask.desc,owner_id:ownerId,rep_id:repId,priority:localTask.priority,due_date:localTask.dueDate||null,due_time:localTask.dueTime||null,category:localTask.category,project,is_field:isField,field_job:fieldJob,escalation,done:false,escalated:false}).then(function(res){if(res&&res.success&&res.task){const tidx=db.tasks.findIndex(x=>x.id===localTask.id);if(tidx>=0){db.tasks[tidx].id=res.task.id;saveDB();}}}).catch(function(){});
+  }
 }
 
 // ═══ MEMBER MODAL ═══
