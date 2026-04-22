@@ -2781,6 +2781,11 @@ function saveDB(){localStorage.setItem('tfp2_db',JSON.stringify(db));window.db=d
     var ln=(m.name||'').toLowerCase();
     if(adminNames.some(function(a){return ln.includes(a);})){m.role='admin';changed=true;}
   });
+  // Add Manthan Mane if missing from local db
+  if(!db.members.some(function(m){return(m.name||'').toLowerCase().includes('manthan');})){
+    db.members.push({id:'m7',name:'Manthan Mane',role:'Site Supervisor',phone:'',email:'',color:'#ab47bc',type:'field'});
+    changed=true;
+  }
   if(changed)saveDB();
 })();
 // Expose globals for Pushp Assistant (runs in separate IIFE scope)
