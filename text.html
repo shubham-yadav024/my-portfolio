@@ -2727,7 +2727,13 @@ async function syncFromDB(){
       });
     }
     const tasksRes=await TasksAPI.getAll();
-    if(tasksRes?.success){db.tasks=tasksRes.tasks.map(t=>({id:t.id,title:t.title,desc:t.description,ownerId:t.owner_id,status:t.status,priority:t.priority,category:t.category,project:t.project||'',dueDate:t.due_date,dueTime:t.due_time,done:t.done,escalated:t.escalated,isField:t.is_field,fieldJob:t.field_job,escalation:t.escalation||[],createdAt:t.created_at}));}
+    if(tasksRes?.success){
+      const backendTasks=tasksRes.tasks.map(t=>({id:t.id,title:t.title,desc:t.description,ownerId:t.owner_id,status:t.status,priority:t.priority,category:t.category,project:t.project||'',dueDate:t.due_date,dueTime:t.due_time,done:t.done,escalated:t.escalated,isField:t.is_field,fieldJob:t.field_job,escalation:t.escalation||[],createdAt:t.created_at}));
+      const backendIds=new Set(backendTasks.map(t=>t.id));
+      // Keep local tasks not yet confirmed by backend (optimistic — retry create)
+      const localOnly=db.tasks.filter(t=>!backendIds.has(t.id)&&t._localOnly);
+      db.tasks=[...backendTasks,...localOnly];
+    }
     const actRes=await ActivityAPI.getAll(30);
     if(actRes?.success){db.activity=actRes.activities.map(a=>({id:a.id,msg:a.msg,type:a.type,time:a.created_at}));}
     if(typeof renderAll==='function')renderAll();
@@ -3163,16 +3169,28 @@ async function saveTask(){
     const idx=db.tasks.findIndex(x=>x.id===editingId);localTask.done=db.tasks[idx]?.done||false;localTask.escalated=db.tasks[idx]?.escalated||false;
     db.tasks[idx]=localTask;log('Task "'+title+'" updated');
   }else{
+    localTask._localOnly=true; // mark as not yet confirmed by backend
     db.tasks.push(localTask);log('Task "'+title+'" assigned to '+getMember(ownerId).name+(isField?' [Field Job]':''));
   }
   // Show on screen immediately (optimistic UI) — don't wait for API
   saveDB();closeModal('task-modal');toast(editingId?'Task updated':'Task created!');
   renderDashboard();renderTaskList();renderFieldJobs();renderEscalation();updateBadges();scheduleAll();
-  // Sync to backend in background
+  // Sync to backend in background — retry up to 5 times if backend is sleeping
   if(editingId){
     TasksAPI.update(editingId,{title,description:localTask.desc,owner_id:ownerId,priority:localTask.priority,due_date:localTask.dueDate||null,due_time:localTask.dueTime||null,category:localTask.category,is_field:isField,field_job:fieldJob,escalation,done:localTask.done}).catch(function(){});
   }else{
-    TasksAPI.create({title,description:localTask.desc,owner_id:ownerId,rep_id:repId,priority:localTask.priority,due_date:localTask.dueDate||null,due_time:localTask.dueTime||null,category:localTask.category,is_field:isField,field_job:fieldJob,escalation,done:false,escalated:false}).then(function(res){if(res&&res.success&&res.task){const tidx=db.tasks.findIndex(x=>x.id===localTask.id);if(tidx>=0){db.tasks[tidx].id=res.task.id;saveDB();}}}).catch(function(){});
+    var _createPayload={title,description:localTask.desc,owner_id:ownerId,rep_id:repId,priority:localTask.priority,due_date:localTask.dueDate||null,due_time:localTask.dueTime||null,category:localTask.category,is_field:isField,field_job:fieldJob,escalation,done:false,escalated:false};
+    var _tryCreate=function(attempt){
+      TasksAPI.create(_createPayload).then(function(res){
+        if(res&&res.success&&res.task){
+          var tidx=db.tasks.findIndex(function(x){return x.id===localTask.id;});
+          if(tidx>=0){db.tasks[tidx].id=res.task.id;db.tasks[tidx]._localOnly=false;saveDB();}
+        }else if(attempt<5){
+          setTimeout(function(){_tryCreate(attempt+1);},5000); // retry after 5s (backend waking up)
+        }
+      }).catch(function(){if(attempt<5)setTimeout(function(){_tryCreate(attempt+1);},5000);});
+    };
+    _tryCreate(1);
   }
 }
 
