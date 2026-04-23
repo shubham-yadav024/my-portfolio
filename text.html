@@ -3658,7 +3658,27 @@ function fireEscalation(task,step,idx){
   sendWebhook('escalation',ft,extra);saveDB();renderDashboard();renderTaskList();renderFieldJobs();renderEscalation();updateBadges();
 }
 // ═══ PHOTO UPLOAD ═══
-var _taskPhotos=[]; // temp storage while modal is open
+var _taskPhotos=[];
+// Smart compress: max 1200px, target ≤200KB, tries WebP then JPEG, steps quality down automatically
+function _smartCompress(img){
+  var TARGET=200*1024; // 200KB
+  var maxDim=1200;
+  var w=img.width,h=img.height;
+  if(w>maxDim){h=Math.round(h*maxDim/w);w=maxDim;}
+  if(h>maxDim){w=Math.round(w*maxDim/h);h=maxDim;}
+  var canvas=document.createElement('canvas');
+  canvas.width=w;canvas.height=h;
+  canvas.getContext('2d').drawImage(img,0,0,w,h);
+  // Detect WebP support
+  var fmt=canvas.toDataURL('image/webp',0.1).startsWith('data:image/webp')?'image/webp':'image/jpeg';
+  // Step down quality until under target size
+  var qs=[0.92,0.82,0.72,0.62,0.52,0.42];
+  for(var i=0;i<qs.length;i++){
+    var b64=canvas.toDataURL(fmt,qs[i]);
+    if(b64.length*0.75<=TARGET||i===qs.length-1)return b64;
+  }
+  return canvas.toDataURL(fmt,0.42);
+}
 function handlePhotoUpload(input){
   var files=Array.from(input.files);
   if(!files.length)return;
@@ -3668,16 +3688,8 @@ function handlePhotoUpload(input){
     reader.onload=function(e){
       var img=new Image();
       img.onload=function(){
-        // Compress to max 800px
-        var canvas=document.createElement('canvas');
-        var max=800;var w=img.width,h=img.height;
-        if(w>max){h=Math.round(h*max/w);w=max;}
-        if(h>max){w=Math.round(w*max/h);h=max;}
-        canvas.width=w;canvas.height=h;
-        canvas.getContext('2d').drawImage(img,0,0,w,h);
-        var b64=canvas.toDataURL('image/jpeg',0.7);
+        var b64=_smartCompress(img);
         _taskPhotos.push(b64);
-        // Show thumbnail
         var wrap=document.createElement('div');
         wrap.style.cssText='position:relative;width:80px;height:80px;flex-shrink:0';
         var thumb=document.createElement('img');
