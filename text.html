@@ -2795,7 +2795,7 @@ async function syncFromDB(){
     if(typeof renderAll==='function')renderAll();
   }catch(err){}
 }
-document.addEventListener('DOMContentLoaded',()=>{if(AuthAPI.isLoggedIn()){syncFromDB();setInterval(syncFromDB,5000);setInterval(function(){if(typeof renderTaskList==='function')renderTaskList();if(typeof renderDashboard==='function')renderDashboard();},1000);}});
+document.addEventListener('DOMContentLoaded',()=>{if(AuthAPI.isLoggedIn()){syncFromDB();setInterval(syncFromDB,5000);setInterval(function(){if(typeof renderTaskList==='function')renderTaskList();if(typeof renderDashboard==='function')renderDashboard();},1000);setInterval(_checkStorageUsage,60000);setTimeout(_checkStorageUsage,5000);}});
 
 // ═══ PRESENCE ═══
 let presenceChannel=null;let onlineUserIds=new Set();
@@ -3226,7 +3226,7 @@ async function saveTask(){
   const repId=document.getElementById('f-rep').value||null;
   const project=document.getElementById('f-project').value||'';
   const existingPhotos=editingId?(db.tasks.find(x=>x.id===editingId)||{}).photos||[]:[];
-  const photos=[...existingPhotos,..._taskPhotos];
+  const photos=[...existingPhotos,..._taskPhotos.filter(function(p){return p!==null;})];
   const localTask={id:editingId||uid(),title,desc:document.getElementById('f-desc').value.trim(),ownerId,repId,priority:document.getElementById('f-priority').value,dueDate:document.getElementById('f-date').value,dueTime:document.getElementById('f-time').value,category:document.getElementById('f-category').value,project,photos,repeat:document.getElementById('f-repeat').value,notifs,escalation,isField,fieldJob,done:false,escalated:false,createdAt:editingId?(db.tasks.find(x=>x.id===editingId)||{}).createdAt||now():now(),updatedAt:now()};
   if(editingId){
     const idx=db.tasks.findIndex(x=>x.id===editingId);localTask.done=db.tasks[idx]?.done||false;localTask.escalated=db.tasks[idx]?.escalated||false;
@@ -3659,9 +3659,13 @@ function fireEscalation(task,step,idx){
 }
 // ═══ PHOTO UPLOAD ═══
 var _taskPhotos=[];
-// Smart compress: max 1200px, target ≤200KB, tries WebP then JPEG, steps quality down automatically
+var _SUPA_URL='https://msxqifrelaccpdvlohga.supabase.co';
+var _SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zeHFpZnJlbGFjY3BkdmxvaGdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NDM4NDMsImV4cCI6MjA5MDUxOTg0M30.hmc3MbdPjTd8vUhw-n--IYld69a3yuDzu0rp4QvOiY0';
+var _PHOTO_BUCKET='task-photos';
+
+// Smart compress: max 1200px, target ≤200KB, tries WebP→JPEG, steps quality down
 function _smartCompress(img){
-  var TARGET=200*1024; // 200KB
+  var TARGET=200*1024;
   var maxDim=1200;
   var w=img.width,h=img.height;
   if(w>maxDim){h=Math.round(h*maxDim/w);w=maxDim;}
@@ -3669,16 +3673,35 @@ function _smartCompress(img){
   var canvas=document.createElement('canvas');
   canvas.width=w;canvas.height=h;
   canvas.getContext('2d').drawImage(img,0,0,w,h);
-  // Detect WebP support
   var fmt=canvas.toDataURL('image/webp',0.1).startsWith('data:image/webp')?'image/webp':'image/jpeg';
-  // Step down quality until under target size
   var qs=[0.92,0.82,0.72,0.62,0.52,0.42];
   for(var i=0;i<qs.length;i++){
     var b64=canvas.toDataURL(fmt,qs[i]);
-    if(b64.length*0.75<=TARGET||i===qs.length-1)return b64;
+    if(b64.length*0.75<=TARGET||i===qs.length-1)return{b64:b64,mime:fmt};
   }
-  return canvas.toDataURL(fmt,0.42);
+  return{b64:canvas.toDataURL(fmt,0.42),mime:fmt};
 }
+
+// Upload compressed photo to Supabase Storage → returns public URL (or base64 fallback)
+async function _uploadPhoto(b64,mime){
+  try{
+    var parts=b64.split(',');
+    var byteStr=atob(parts[1]);
+    var arr=new Uint8Array(byteStr.length);
+    for(var i=0;i<byteStr.length;i++)arr[i]=byteStr.charCodeAt(i);
+    var blob=new Blob([arr],{type:mime});
+    var ext=mime==='image/webp'?'webp':'jpg';
+    var fname='photos/'+Date.now()+'_'+Math.random().toString(36).slice(2)+'.'+ext;
+    var res=await fetch(_SUPA_URL+'/storage/v1/object/'+_PHOTO_BUCKET+'/'+fname,{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+_SUPA_KEY,'Content-Type':mime,'x-upsert':'true'},
+      body:blob
+    });
+    if(res.ok)return _SUPA_URL+'/storage/v1/object/public/'+_PHOTO_BUCKET+'/'+fname;
+  }catch(e){}
+  return b64; // fallback to base64 if upload fails
+}
+
 function handlePhotoUpload(input){
   var files=Array.from(input.files);
   if(!files.length)return;
@@ -3688,23 +3711,69 @@ function handlePhotoUpload(input){
     reader.onload=function(e){
       var img=new Image();
       img.onload=function(){
-        var b64=_smartCompress(img);
-        _taskPhotos.push(b64);
+        var compressed=_smartCompress(img);
+        // Show thumbnail immediately (base64), upload in background
         var wrap=document.createElement('div');
         wrap.style.cssText='position:relative;width:80px;height:80px;flex-shrink:0';
         var thumb=document.createElement('img');
-        thumb.src=b64;thumb.style.cssText='width:80px;height:80px;object-fit:cover;border-radius:8px;border:2px solid var(--border2)';
+        thumb.src=compressed.b64;
+        thumb.style.cssText='width:80px;height:80px;object-fit:cover;border-radius:8px;border:2px solid var(--border2)';
+        var spinner=document.createElement('div');
+        spinner.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,.4);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px';
+        spinner.innerHTML='⏳';
         var del=document.createElement('button');
-        del.innerHTML='✕';del.style.cssText='position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:18px;padding:0';
-        var idx=_taskPhotos.length-1;
-        del.onclick=function(){_taskPhotos.splice(idx,1);wrap.remove();};
-        wrap.appendChild(thumb);wrap.appendChild(del);preview.appendChild(wrap);
+        del.innerHTML='✕';
+        del.style.cssText='position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:18px;padding:0;display:none';
+        wrap.appendChild(thumb);wrap.appendChild(spinner);wrap.appendChild(del);
+        preview.appendChild(wrap);
+        var idx=_taskPhotos.length;
+        _taskPhotos.push(null); // placeholder
+        _uploadPhoto(compressed.b64,compressed.mime).then(function(url){
+          _taskPhotos[idx]=url;
+          spinner.remove();
+          del.style.display='';
+          del.onclick=function(){_taskPhotos[idx]=null;wrap.remove();};
+        });
       };
       img.src=e.target.result;
     };
     reader.readAsDataURL(file);
   });
   input.value='';
+}
+
+// ═══ STORAGE WARNING ═══
+var _storageWarnShown={};
+function _checkStorageUsage(){
+  try{
+    var total=0;
+    for(var k in localStorage){if(Object.prototype.hasOwnProperty.call(localStorage,k))total+=(localStorage[k].length+k.length)*2;}
+    var MAX=5*1024*1024;
+    var pct=Math.min(Math.round(total/MAX*100),100);
+    [80,90,95,99].forEach(function(t){
+      if(pct>=t&&!_storageWarnShown[t]){
+        _storageWarnShown[t]=true;
+        _showStorageWarn(pct,t);
+      }
+    });
+  }catch(e){}
+}
+function _showStorageWarn(pct,threshold){
+  if(document.getElementById('_sw_ov'))return;
+  var col=threshold>=99?'#ef4444':threshold>=95?'#f97316':threshold>=90?'#f59e0b':'#6366f1';
+  var icon=threshold>=99?'🚨':threshold>=95?'⚠️':threshold>=90?'⚡':'📦';
+  var ov=document.createElement('div');
+  ov.id='_sw_ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10000;display:flex;align-items:center;justify-content:center';
+  ov.innerHTML='<div style="background:var(--card);border:2.5px solid '+col+';border-radius:16px;padding:30px 28px;max-width:380px;width:92%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5)">'
+    +'<div style="font-size:44px;margin-bottom:10px">'+icon+'</div>'
+    +'<div style="font-size:19px;font-weight:700;color:'+col+';margin-bottom:8px">Storage '+pct+'% Full!</div>'
+    +'<div style="color:var(--text2);font-size:13px;line-height:1.65;margin-bottom:20px">Local storage almost full. Purana data clear karo nahi to naye tasks ya photos save nahi honge.</div>'
+    +'<div style="display:flex;gap:10px;justify-content:center">'
+    +'<button onclick="document.getElementById(\'_sw_ov\').remove()" style="padding:10px 18px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text1);cursor:pointer;font-size:13px">Baad mein</button>'
+    +'<button onclick="if(confirm(\'Sab purana local data delete hoga. Account logout nahi hoga. Continue?\')){var u=localStorage.getItem(\'taskflow_user\');localStorage.clear();if(u)localStorage.setItem(\'taskflow_user\',u);location.reload();}" style="padding:10px 18px;background:'+col+';border:none;border-radius:8px;color:#fff;font-weight:600;cursor:pointer;font-size:13px">Storage Clear Karo</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
 }
 
 // ═══ DAILY TASK ═══
