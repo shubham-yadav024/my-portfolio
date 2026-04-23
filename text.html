@@ -2781,7 +2781,10 @@ async function syncFromDB(){
     }
     const tasksRes=await TasksAPI.getAll();
     if(tasksRes?.success){
-      const backendTasks=tasksRes.tasks.map(t=>({id:t.id,title:t.title,desc:t.description,ownerId:t.owner_id,status:t.status,priority:t.priority,category:t.category,project:t.project||'',dueDate:t.due_date,dueTime:t.due_time,done:t.done,escalated:t.escalated,isField:t.is_field,fieldJob:t.field_job,escalation:t.escalation||[],createdAt:t.created_at}));
+      const backendTasks=tasksRes.tasks.map(t=>{
+        const existing=db.tasks.find(x=>x.id===t.id);
+        return {id:t.id,title:t.title,desc:t.description,ownerId:t.owner_id,status:t.status,priority:t.priority,category:t.category,project:t.project||'',dueDate:t.due_date,dueTime:t.due_time,done:t.done,escalated:t.escalated,isField:t.is_field,fieldJob:t.field_job,escalation:t.escalation||[],createdAt:t.created_at,photos:existing?existing.photos||[]:[]};
+      });
       const backendIds=new Set(backendTasks.map(t=>t.id));
       // Keep local tasks not yet confirmed by backend (optimistic — retry create)
       const localOnly=db.tasks.filter(t=>!backendIds.has(t.id)&&t._localOnly);
