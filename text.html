@@ -435,6 +435,7 @@ textarea.fctl{resize:vertical;min-height:65px;}
       </div>
       <div class="snav-section">
         <div class="snav-lbl">Management</div>
+        <div class="nitem" onclick="showView('dailytask',this)"><span class="ni">📸</span>Daily Task</div>
         <div class="nitem admin-only" onclick="showView('analytics',this)"><span class="ni">📊</span>Analytics</div>
         <div class="nitem admin-only" onclick="showView('attendance',this)"><span class="ni">📅</span>Attendance</div>
         <div class="nitem admin-only" onclick="showView('team',this)"><span class="ni">👥</span>Team Members</div>
@@ -794,6 +795,21 @@ textarea.fctl{resize:vertical;min-height:65px;}
         ...
       </div>
 
+      <!-- DAILY TASK VIEW -->
+      <div class="view" id="view-dailytask">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:10px">
+          <div>
+            <h2 style="font-family:var(--font-head);font-size:18px;font-weight:700">📸 Daily Task</h2>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px">All tasks with photos & full details</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="date" id="dt-date" class="fctl" style="width:auto;padding:6px 10px;font-size:13px" onchange="renderDailyTask()"/>
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('dt-date').value=new Date().toISOString().split('T')[0];renderDailyTask()">Today</button>
+          </div>
+        </div>
+        <div id="daily-task-list" style="display:flex;flex-direction:column;gap:16px"></div>
+      </div>
+
       <!-- DIRECT MESSAGES VIEW -->
       <div class="view" id="view-dm">
         <div style="display:flex;height:calc(100vh - 120px);overflow:hidden;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--card)">
@@ -901,6 +917,14 @@ textarea.fctl{resize:vertical;min-height:65px;}
         </div>
       </div>
       <div class="fgrid full"><div class="fg"><label class="flbl">Description</label><textarea class="fctl" id="f-desc" placeholder="Task details..." rows="5" style="min-height:110px;resize:vertical"></textarea></div></div>
+      <div class="fgrid full"><div class="fg">
+        <label class="flbl">📷 Photos (optional)</label>
+        <div id="f-photo-preview" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"></div>
+        <label style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg3);border:1.5px dashed var(--border2);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text3)">
+          <span style="font-size:18px">📷</span> Click to add photos
+          <input type="file" id="f-photos" accept="image/*" multiple style="display:none" onchange="handlePhotoUpload(this)"/>
+        </label>
+      </div></div>
       <div class="sdiv">Field Job Details</div>
       <div class="field-section">
         <div class="field-toggle-row" style="margin-bottom:12px">
@@ -3079,7 +3103,7 @@ function showView(name,el){
   document.querySelectorAll('.nitem').forEach(n=>n.classList.remove('active'));
   document.getElementById('view-'+name).classList.add('active');
   if(el)el.classList.add('active');
- const titles={dashboard:'Dashboard',tasks:isAdmin()?'All Tasks':'My Tasks',field:'Field Jobs',escalation:'Escalation Matrix',analytics:'Analytics',attendance:'Attendance',team:'Team Members',activity:'Activity Log',chat:'Group Chat',dm:'Direct Messages'};
+ const titles={dashboard:'Dashboard',tasks:isAdmin()?'All Tasks':'My Tasks',field:'Field Jobs',escalation:'Escalation Matrix',analytics:'Analytics',attendance:'Attendance',team:'Team Members',activity:'Activity Log',chat:'Group Chat',dm:'Direct Messages',dailytask:'Daily Task'};
   document.getElementById('tbar-title').textContent=titles[name]||'Pushp CI Tasks';
   document.getElementById('export-wrap').style.display=(isAdmin()&&(name==='tasks'||name==='analytics'||name==='dashboard'))?'':'none';
   closeSidebar();
@@ -3094,6 +3118,11 @@ function showView(name,el){
   if(name==='chat')loadChat();
   if(name==='dm')initDM();
   if(name==='activity')renderActivity();
+  if(name==='dailytask'){
+    var dtEl=document.getElementById('dt-date');
+    if(dtEl&&!dtEl.value)dtEl.value=new Date().toISOString().split('T')[0];
+    renderDailyTask();
+  }
 }
 function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('soverlay').classList.toggle('open');}
 function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('soverlay').classList.remove('open');}
@@ -3121,7 +3150,7 @@ function openAddTask(forceField){
   editingId=null;document.getElementById('modal-title').textContent='New Task';document.getElementById('edit-id').value='';
   ['f-title','f-desc','f-site','f-address','f-customer','f-cphone','f-cmanager','f-cmanagerphone','f-sitenotes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('f-priority').value='medium';document.getElementById('f-date').value=new Date().toISOString().split('T')[0];
-  document.getElementById('f-time').value='';document.getElementById('f-project').value='';document.getElementById('f-category').value=forceField?'Field Service':'Work';
+  document.getElementById('f-time').value='';document.getElementById('f-project').value='';document.getElementById('f-category').value=forceField?'Field Service':'Work';_taskPhotos=[];var pp=document.getElementById('f-photo-preview');if(pp)pp.innerHTML='';
   document.getElementById('f-repeat').value='none';document.getElementById('f-visitdate').value='';document.getElementById('f-visittime').value='';
   document.getElementById('f-isfield').checked=!!forceField;document.getElementById('field-fields').style.display=forceField?'block':'none';
   document.querySelectorAll('#ntogs .ntog').forEach(t=>t.classList.toggle('on',t.dataset.n==='browser'));
@@ -3193,7 +3222,9 @@ async function saveTask(){
   const fieldJob=isField?{site:document.getElementById('f-site').value.trim(),address:document.getElementById('f-address').value.trim(),customer:document.getElementById('f-customer').value.trim(),cphone:document.getElementById('f-cphone').value.trim(),cmanager:document.getElementById('f-cmanager').value.trim(),cmanagerphone:document.getElementById('f-cmanagerphone').value.trim(),visitDate:document.getElementById('f-visitdate').value,visitTime:document.getElementById('f-visittime').value,siteNotes:document.getElementById('f-sitenotes').value.trim()}:null;
   const repId=document.getElementById('f-rep').value||null;
   const project=document.getElementById('f-project').value||'';
-  const localTask={id:editingId||uid(),title,desc:document.getElementById('f-desc').value.trim(),ownerId,repId,priority:document.getElementById('f-priority').value,dueDate:document.getElementById('f-date').value,dueTime:document.getElementById('f-time').value,category:document.getElementById('f-category').value,project,repeat:document.getElementById('f-repeat').value,notifs,escalation,isField,fieldJob,done:false,escalated:false,createdAt:editingId?(db.tasks.find(x=>x.id===editingId)||{}).createdAt||now():now(),updatedAt:now()};
+  const existingPhotos=editingId?(db.tasks.find(x=>x.id===editingId)||{}).photos||[]:[];
+  const photos=[...existingPhotos,..._taskPhotos];
+  const localTask={id:editingId||uid(),title,desc:document.getElementById('f-desc').value.trim(),ownerId,repId,priority:document.getElementById('f-priority').value,dueDate:document.getElementById('f-date').value,dueTime:document.getElementById('f-time').value,category:document.getElementById('f-category').value,project,photos,repeat:document.getElementById('f-repeat').value,notifs,escalation,isField,fieldJob,done:false,escalated:false,createdAt:editingId?(db.tasks.find(x=>x.id===editingId)||{}).createdAt||now():now(),updatedAt:now()};
   if(editingId){
     const idx=db.tasks.findIndex(x=>x.id===editingId);localTask.done=db.tasks[idx]?.done||false;localTask.escalated=db.tasks[idx]?.escalated||false;
     db.tasks[idx]=localTask;log('Task "'+title+'" updated');
@@ -3271,6 +3302,7 @@ function renderTaskItem(task,compact){
         ${task.escalation&&task.escalation.length?`<span class="tmeta" style="color:var(--pink)">🔺 ${task.escalation.length} escalation${task.escalation.length>1?'s':''}</span>`:''}
       </div>
       ${task.desc?`<div style="font-size:13px;color:var(--text2);margin-top:6px;line-height:1.6;padding:8px 12px;background:var(--bg3);border-radius:6px;border-left:3px solid var(--accent);white-space:pre-wrap;word-break:break-word">${task.desc}</div>`:''}
+      ${task.photos&&task.photos.length?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${task.photos.map(p=>`<img src="${p}" onclick="openPhotoViewer('${p}')" style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1.5px solid var(--border2);cursor:zoom-in">`).join('')}</div>`:''}
       ${task.isField&&fj?`<div class="field-card"><div class="field-card-head">📍 Field Job Details</div><div class="field-grid">
         ${fj.site?`<div class="field-row"><span class="field-lbl">Site</span><span class="field-val">${fj.site}</span></div>`:''}
         ${fj.address?`<div class="field-row"><span class="field-lbl">Address</span><span class="field-val">${fj.address}</span></div>`:''}
@@ -3622,6 +3654,91 @@ function fireEscalation(task,step,idx){
   if(Notification&&Notification.permission==='granted')new Notification('Pushp CI — ESCALATION',{body:buildMessage('escalation',ft,extra)});
   sendWebhook('escalation',ft,extra);saveDB();renderDashboard();renderTaskList();renderFieldJobs();renderEscalation();updateBadges();
 }
+// ═══ PHOTO UPLOAD ═══
+var _taskPhotos=[]; // temp storage while modal is open
+function handlePhotoUpload(input){
+  var files=Array.from(input.files);
+  if(!files.length)return;
+  var preview=document.getElementById('f-photo-preview');
+  files.forEach(function(file){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var img=new Image();
+      img.onload=function(){
+        // Compress to max 800px
+        var canvas=document.createElement('canvas');
+        var max=800;var w=img.width,h=img.height;
+        if(w>max){h=Math.round(h*max/w);w=max;}
+        if(h>max){w=Math.round(w*max/h);h=max;}
+        canvas.width=w;canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        var b64=canvas.toDataURL('image/jpeg',0.7);
+        _taskPhotos.push(b64);
+        // Show thumbnail
+        var wrap=document.createElement('div');
+        wrap.style.cssText='position:relative;width:80px;height:80px;flex-shrink:0';
+        var thumb=document.createElement('img');
+        thumb.src=b64;thumb.style.cssText='width:80px;height:80px;object-fit:cover;border-radius:8px;border:2px solid var(--border2)';
+        var del=document.createElement('button');
+        del.innerHTML='✕';del.style.cssText='position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:18px;padding:0';
+        var idx=_taskPhotos.length-1;
+        del.onclick=function(){_taskPhotos.splice(idx,1);wrap.remove();};
+        wrap.appendChild(thumb);wrap.appendChild(del);preview.appendChild(wrap);
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value='';
+}
+
+// ═══ DAILY TASK ═══
+function renderDailyTask(){
+  var dateVal=document.getElementById('dt-date')&&document.getElementById('dt-date').value;
+  var filterDate=dateVal||new Date().toISOString().split('T')[0];
+  var tasks=db.tasks.filter(function(t){
+    var d=(t.createdAt||t.dueDate||'').slice(0,10);
+    return d===filterDate;
+  });
+  var el=document.getElementById('daily-task-list');
+  if(!el)return;
+  if(!tasks.length){
+    el.innerHTML='<div style="text-align:center;color:var(--text3);padding:3rem;font-size:14px">No tasks found for this date</div>';
+    return;
+  }
+  el.innerHTML=tasks.map(function(t){
+    var owner=getMember(t.ownerId);
+    var status=t.done?'Done':isOverdue(t)?'Overdue':'Pending';
+    var sColor=t.done?'var(--green)':isOverdue(t)?'var(--red)':'var(--amber)';
+    var photos=(t.photos||[]);
+    var photosHtml=photos.length?'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">'+photos.map(function(p){
+      return'<img src="'+p+'" onclick="openPhotoViewer(\''+p+'\')" style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:2px solid var(--border2);cursor:zoom-in">';
+    }).join('')+'</div>':'';
+    return'<div style="background:var(--card);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:16px 20px">'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
+      +'<div class="oavatar" style="background:'+owner.color+';width:38px;height:38px;font-size:14px;flex-shrink:0">'+initials(owner.name)+'</div>'
+      +'<div style="flex:1"><div style="font-size:14px;font-weight:600">'+owner.name+'</div>'
+      +'<div style="font-size:11px;color:var(--text3)">'+fmtD(t.createdAt||t.dueDate||'')+'</div></div>'
+      +'<span style="font-size:11px;font-weight:700;color:'+sColor+'">'+status+'</span></div>'
+      +'<div style="font-size:15px;font-weight:600;margin-bottom:6px">'+t.title+'</div>'
+      +(t.project?'<span style="font-size:11px;font-weight:700;background:rgba(99,102,241,0.15);color:#a5b4fc;padding:2px 8px;border-radius:10px;margin-right:6px">'+t.project+'</span>':'')
+      +(t.category?'<span style="font-size:11px;background:var(--bg3);color:var(--text3);padding:2px 8px;border-radius:10px">'+t.category+'</span>':'')
+      +(t.desc?'<div style="font-size:13px;color:var(--text2);margin-top:10px;line-height:1.6;padding:10px 12px;background:var(--bg3);border-radius:8px;border-left:3px solid var(--accent);white-space:pre-wrap">'+t.desc+'</div>':'')
+      +photosHtml
+      +'</div>';
+  }).join('');
+}
+
+// Photo full-screen viewer
+function openPhotoViewer(src){
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+  ov.onclick=function(){document.body.removeChild(ov);};
+  var img=document.createElement('img');
+  img.src=src;img.style.cssText='max-width:95vw;max-height:92vh;border-radius:8px;box-shadow:0 0 40px rgba(0,0,0,.8)';
+  ov.appendChild(img);document.body.appendChild(ov);
+}
+
 function openTaskReportModal(){
   var today=new Date().toISOString().split('T')[0];
   var monthStart=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().split('T')[0];
