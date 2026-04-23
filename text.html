@@ -478,7 +478,8 @@ textarea.fctl{resize:vertical;min-height:65px;}
         <div id="export-wrap" style="position:relative;display:none">
           <button class="btn btn-ghost btn-sm" onclick="toggleExportMenu()" id="export-btn">⬇ Export ▾</button>
           <div id="export-menu" style="display:none;position:absolute;top:38px;right:0;background:var(--card);border:1px solid var(--border2);border-radius:var(--radius-sm);min-width:180px;z-index:50;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.4)">
-            <div onclick="exportExcel();closeExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;color:var(--text2);display:flex;align-items:center;gap:8px;transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">📊 Excel / CSV</div>
+            <div onclick="openTaskReportModal();closeExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;color:var(--accent);font-weight:600;display:flex;align-items:center;gap:8px;transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''" >📅 Task Report (Date Range)</div>
+            <div onclick="exportExcel();closeExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;color:var(--text2);display:flex;align-items:center;gap:8px;border-top:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">📊 Excel / CSV (All Tasks)</div>
             <div onclick="exportPDF();closeExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;color:var(--text2);display:flex;align-items:center;gap:8px;border-top:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">📄 PDF Report</div>
             <div onclick="exportDashboardPDF();closeExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;color:var(--text2);display:flex;align-items:center;gap:8px;border-top:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">📋 Summary Dashboard PDF</div>
             <div onclick="downloadTemplate();closeExportMenu()" style="padding:10px 16px;font-size:13px;cursor:pointer;color:var(--teal);font-weight:500;display:flex;align-items:center;gap:8px;border-top:2px dashed var(--border2);transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">📥 Download Bulk Upload Template</div>
@@ -1010,6 +1011,33 @@ textarea.fctl{resize:vertical;min-height:65px;}
     <div class="mfoot">
       <button class="btn btn-ghost" onclick="closeModal('member-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveMember()">Add Member</button>
+    </div>
+  </div>
+</div>
+
+<!-- TASK REPORT MODAL -->
+<div class="moverlay" id="task-report-modal" onclick="if(event.target===this)closeModal('task-report-modal')">
+  <div class="modal" style="max-width:460px">
+    <div class="mhead"><h2>📅 Task Report — Date Range</h2><button class="btn btn-ghost btn-sm" onclick="closeModal('task-report-modal')">✕</button></div>
+    <div class="mbody">
+      <div style="font-size:13px;color:var(--text3);margin-bottom:1rem">Select date range to download full task report with descriptions, owners, status, and all details.</div>
+      <div class="fgrid">
+        <div class="fg"><label class="flbl">From Date</label><input class="fctl" type="date" id="rep-from"/></div>
+        <div class="fg"><label class="flbl">To Date</label><input class="fctl" type="date" id="rep-to"/></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+        <button class="btn btn-ghost btn-sm" onclick="setReportRange('today')">Today</button>
+        <button class="btn btn-ghost btn-sm" onclick="setReportRange('week')">This Week</button>
+        <button class="btn btn-ghost btn-sm" onclick="setReportRange('month')">This Month</button>
+        <button class="btn btn-ghost btn-sm" onclick="setReportRange('all')">All Time</button>
+      </div>
+      <div style="margin-top:1rem;padding:12px;background:var(--bg3);border-radius:8px;font-size:13px;color:var(--text3)">
+        Report includes: Task name · Owner · Project · Priority · Status · Due Date · Created Date · Description · Field Job details
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-ghost" onclick="closeModal('task-report-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="downloadTaskReport()">📥 Download CSV</button>
     </div>
   </div>
 </div>
@@ -3592,6 +3620,57 @@ function fireEscalation(task,step,idx){
   toast('🔺 Escalation Level '+step.level+': Notifying '+mgr.name,'error');
   if(Notification&&Notification.permission==='granted')new Notification('Pushp CI — ESCALATION',{body:buildMessage('escalation',ft,extra)});
   sendWebhook('escalation',ft,extra);saveDB();renderDashboard();renderTaskList();renderFieldJobs();renderEscalation();updateBadges();
+}
+function openTaskReportModal(){
+  var today=new Date().toISOString().split('T')[0];
+  var monthStart=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().split('T')[0];
+  document.getElementById('rep-from').value=monthStart;
+  document.getElementById('rep-to').value=today;
+  openModal('task-report-modal');
+}
+function setReportRange(range){
+  var today=new Date();
+  var to=today.toISOString().split('T')[0];
+  var from=to;
+  if(range==='week'){var d=new Date(today);d.setDate(d.getDate()-6);from=d.toISOString().split('T')[0];}
+  else if(range==='month'){from=new Date(today.getFullYear(),today.getMonth(),1).toISOString().split('T')[0];}
+  else if(range==='all'){from='2024-01-01';}
+  document.getElementById('rep-from').value=from;
+  document.getElementById('rep-to').value=to;
+}
+function downloadTaskReport(){
+  var from=document.getElementById('rep-from').value;
+  var to=document.getElementById('rep-to').value;
+  if(!from||!to){toast('Please select date range','error');return;}
+  var fromD=new Date(from+'T00:00:00');
+  var toD=new Date(to+'T23:59:59');
+  var tasks=db.tasks.filter(function(t){
+    var d=new Date(t.createdAt||t.dueDate||'2024-01-01');
+    return d>=fromD&&d<=toD;
+  });
+  if(!tasks.length){toast('No tasks found in this date range','error');return;}
+  var Q=function(v){var s=String(v==null?'':v).replace(/"/g,'""').replace(/\r?\n/g,' ');return'"'+s+'"';};
+  var header=['Sr.No','Task Title','Assigned To','Project','Priority','Status','Due Date','Due Time','Created Date','Category','Field Job','Customer','Site','Description'];
+  var rows=[header.map(Q).join(',')];
+  tasks.forEach(function(t,i){
+    var owner=getMember(t.ownerId);
+    var fj=t.fieldJob||{};
+    var status=t.done?'Completed':isOverdue(t)?'Overdue':'Pending';
+    var created=t.createdAt?new Date(t.createdAt).toLocaleDateString('en-IN'):'';
+    var due=t.dueDate?new Date(t.dueDate+'T12:00').toLocaleDateString('en-IN'):'';
+    rows.push([
+      Q(i+1),Q(t.title),Q(owner.name),Q(t.project||''),Q(t.priority),Q(status),
+      Q(due),Q(t.dueTime||''),Q(created),Q(t.category||''),
+      Q(t.isField?'Yes':'No'),Q(fj.customer||''),Q(fj.site||''),Q(t.desc||'')
+    ].join(','));
+  });
+  var csv=rows.join('\r\n');
+  var blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  var url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='PushpCI_Tasks_'+from+'_to_'+to+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  closeModal('task-report-modal');
+  toast('Report downloaded: '+tasks.length+' tasks','success');
 }
 function exportExcel(){
   const tasks=isAdmin()?db.tasks:getVisibleTasks();
