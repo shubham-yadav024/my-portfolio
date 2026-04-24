@@ -3591,8 +3591,36 @@ function renderTaskList(){
       +'</div>';
     }).join('');
   } else {
-    // Employee: flat list (only their own tasks)
-    document.getElementById('main-tlist').innerHTML=tasks.map(t=>renderTaskItem(t,false)).join('');
+    // Employee: show clickable profile header + their tasks
+    var empMid=currentUser&&currentUser.memberId;
+    var empMember=empMid?db.members.find(function(m){return m.id===empMid;}):null;
+    var empHeader='';
+    if(empMember){
+      var emt=tasks;
+      var emd=emt.filter(function(t){return t.done;}).length;
+      var emo=emt.filter(function(t){return isOverdue(t)&&!t.done;}).length;
+      var emp=emt.filter(function(t){return !t.done&&!isOverdue(t);}).length;
+      var epct=emt.length?Math.round(emd/emt.length*100):0;
+      empHeader='<div onclick="openMemberDetail(\''+empMember.id+'\')" style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--card);border:1px solid var(--border2);border-radius:12px 12px 0 0;cursor:pointer;margin-bottom:0;transition:background .15s" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'var(--card)\'">'
+        +'<div class="oavatar" style="background:'+empMember.color+';width:40px;height:40px;font-size:15px;flex-shrink:0">'+initials(empMember.name)+'</div>'
+        +'<div style="flex:1;min-width:0">'
+          +'<div style="font-size:14px;font-weight:700;color:var(--text)">'+empMember.name+'</div>'
+          +'<div style="font-size:11px;color:var(--text3);margin-top:1px">'+(empMember.role||'Team Member')+'</div>'
+        +'</div>'
+        +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+          +(emo>0?'<span style="font-size:11px;font-weight:700;color:var(--red);background:rgba(239,68,68,.12);padding:3px 8px;border-radius:6px">🔴 '+emo+' Overdue</span>':'')
+          +(emp>0?'<span style="font-size:11px;font-weight:600;color:var(--amber);background:rgba(245,158,11,.12);padding:3px 8px;border-radius:6px">🟡 '+emp+' Pending</span>':'')
+          +'<span style="font-size:11px;font-weight:600;color:var(--green);background:rgba(34,197,94,.12);padding:3px 8px;border-radius:6px">✅ '+emd+' Done</span>'
+          +'<span style="font-size:11px;color:var(--text3)">'+epct+'%</span>'
+        +'</div>'
+        +'<div style="font-size:12px;color:var(--text3)">View Full Stats →</div>'
+      +'</div>'
+      +'<div style="height:4px;background:var(--bg3);border-radius:0;margin-bottom:0"><div style="height:4px;width:'+epct+'%;background:'+(epct===100?'var(--green)':emo>0?'var(--red)':'var(--accent)')+';border-radius:0;transition:width .4s"></div></div>';
+    }
+    document.getElementById('main-tlist').innerHTML=empHeader
+      +(empHeader?'<div style="border:1px solid var(--border2);border-top:none;border-radius:0 0 12px 12px;overflow:hidden;margin-bottom:16px">':'' )
+      +(tasks.length?tasks.map(t=>renderTaskItem(t,false)).join(''):'<div style="color:var(--text3);text-align:center;padding:2rem;font-size:14px">No tasks found</div>')
+      +(empHeader?'</div>':'');
   }
 }
 
@@ -3824,11 +3852,11 @@ function openMemberDetail(id){
         +'</div>'
         +fieldHtml
         +photosHtml
-        // Action buttons
-        +(isAdmin()?'<div style="display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border2)">'
-          +'<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();closeModal(\'member-detail-modal\');openEditTask(\''+t.id+'\')">✏️ Edit Task</button>'
+        // Action buttons — visible to all
+        +'<div style="display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border2)">'
+          +(isAdmin()?'<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();closeModal(\'member-detail-modal\');openEditTask(\''+t.id+'\')">✏️ Edit Task</button>':'')
           +'<button class="btn btn-sm" style="background:'+(t.done?'rgba(245,158,11,.15)':'rgba(34,197,94,.15)')+';color:'+(t.done?'var(--amber)':'var(--green)')+';border:1px solid '+(t.done?'var(--amber)':'var(--green)')+'" onclick="event.stopPropagation();toggleDone(\''+t.id+'\');setTimeout(function(){openMemberDetail(\''+id+'\');},100)">'+(t.done?'↩️ Reopen':'✅ Mark Done')+'</button>'
-        +'</div>':'')
+        +'</div>')
       +'</div>'
     +'</div>';
   }).join(''):'<div style="color:var(--text3);font-size:13px;padding:16px;text-align:center">No tasks assigned yet</div>';
