@@ -1033,42 +1033,51 @@ textarea.fctl{resize:vertical;min-height:65px;}
 
 <!-- MEMBER DETAIL MODAL -->
 <div class="moverlay" id="member-detail-modal" onclick="if(event.target===this)closeModal('member-detail-modal')">
-  <div class="modal" style="max-width:600px">
-    <div class="mhead">
-      <div style="display:flex;align-items:center;gap:12px">
-        <div id="mdm-avatar" class="oavatar" style="width:42px;height:42px;font-size:15px;flex-shrink:0"></div>
+  <div class="modal" style="max-width:780px;max-height:92vh;display:flex;flex-direction:column">
+    <div class="mhead" style="flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div id="mdm-avatar" class="oavatar" style="width:48px;height:48px;font-size:17px;flex-shrink:0"></div>
         <div>
-          <h2 id="mdm-name" style="margin:0"></h2>
-          <div id="mdm-role" style="font-size:12px;color:var(--text3);margin-top:2px"></div>
+          <h2 id="mdm-name" style="margin:0;font-size:20px"></h2>
+          <div id="mdm-role" style="font-size:12px;color:var(--text3);margin-top:3px"></div>
         </div>
       </div>
       <button class="btn btn-ghost btn-sm" onclick="closeModal('member-detail-modal')">✕</button>
     </div>
-    <div class="mbody">
+    <div class="mbody" style="overflow-y:auto;flex:1">
       <!-- Stats row -->
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.25rem">
-        <div style="background:var(--bg2);border-radius:10px;padding:14px;text-align:center">
-          <div id="mdm-total" style="font-size:22px;font-weight:700"></div>
+        <div style="background:var(--bg2);border-radius:10px;padding:14px;text-align:center;border-bottom:3px solid var(--accent)">
+          <div id="mdm-total" style="font-size:26px;font-weight:800;font-family:var(--font-head)"></div>
           <div style="font-size:11px;color:var(--text3);margin-top:2px">Total</div>
         </div>
-        <div style="background:var(--bg2);border-radius:10px;padding:14px;text-align:center">
-          <div id="mdm-done" style="font-size:22px;font-weight:700;color:var(--green)"></div>
+        <div style="background:var(--bg2);border-radius:10px;padding:14px;text-align:center;border-bottom:3px solid var(--green)">
+          <div id="mdm-done" style="font-size:26px;font-weight:800;font-family:var(--font-head);color:var(--green)"></div>
           <div style="font-size:11px;color:var(--text3);margin-top:2px">Completed</div>
         </div>
-        <div style="background:var(--bg2);border-radius:10px;padding:14px;text-align:center">
-          <div id="mdm-pending" style="font-size:22px;font-weight:700;color:var(--amber)"></div>
+        <div style="background:var(--bg2);border-radius:10px;padding:14px;text-align:center;border-bottom:3px solid var(--amber)">
+          <div id="mdm-pending" style="font-size:26px;font-weight:800;font-family:var(--font-head);color:var(--amber)"></div>
           <div style="font-size:11px;color:var(--text3);margin-top:2px">Pending</div>
         </div>
-        <div style="background:var(--bg2);border-radius:10px;padding:14px;text-align:center">
-          <div id="mdm-overdue" style="font-size:22px;font-weight:700;color:var(--red)"></div>
+        <div style="background:var(--bg2);border-radius:10px;padding:14px;text-align:center;border-bottom:3px solid var(--red)">
+          <div id="mdm-overdue" style="font-size:26px;font-weight:800;font-family:var(--font-head);color:var(--red)"></div>
           <div style="font-size:11px;color:var(--text3);margin-top:2px">Overdue</div>
         </div>
       </div>
-      <!-- Progress chart -->
-      <div id="mdm-chart" style="margin-bottom:1.25rem"></div>
+      <!-- Charts row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:1.25rem">
+        <!-- Progress chart -->
+        <div id="mdm-chart"></div>
+        <!-- Weekly bar chart -->
+        <div style="background:var(--bg2);border-radius:10px;padding:14px">
+          <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">Last 7 Days Activity</div>
+          <div id="mdm-barchart" style="display:flex;align-items:flex-end;gap:5px;height:70px"></div>
+          <div id="mdm-barlabels" style="display:flex;gap:5px;margin-top:5px"></div>
+        </div>
+      </div>
       <!-- Task list -->
-      <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Tasks</div>
-      <div id="mdm-tasks" style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto"></div>
+      <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">All Tasks (click to expand)</div>
+      <div id="mdm-tasks" style="display:flex;flex-direction:column;gap:8px"></div>
     </div>
   </div>
 </div>
@@ -3696,22 +3705,59 @@ function openMemberDetail(id){
       +'</div>';
     }).join('')
     +'</div>';
+  // Weekly bar chart for this member
+  var mBarDays=[];
+  for(var bi=6;bi>=0;bi--){var bd=new Date();bd.setDate(bd.getDate()-bi);var bds=bd.toISOString().split('T')[0];var bLabel=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][bd.getDay()];var bCount=mt.filter(function(t){return(t.createdAt||t.dueDate||'').slice(0,10)===bds;}).length;mBarDays.push({label:bLabel,count:bCount,today:bi===0});}
+  var mMaxB=Math.max.apply(null,mBarDays.map(function(d){return d.count;}))||1;
+  document.getElementById('mdm-barchart').innerHTML=mBarDays.map(function(d){
+    var h=Math.max(Math.round(d.count/mMaxB*60),d.count?4:2);
+    var col=d.today?'var(--accent)':d.count?m.color||'rgba(99,102,241,0.6)':'var(--bg3)';
+    return'<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;justify-content:flex-end">'
+      +(d.count?'<div style="font-size:9px;color:var(--text3);font-weight:600">'+d.count+'</div>':'<div style="font-size:9px;color:transparent">0</div>')
+      +'<div style="width:100%;background:'+col+';border-radius:3px 3px 0 0;height:'+h+'px;transition:height .4s"></div>'
+    +'</div>';
+  }).join('');
+  document.getElementById('mdm-barlabels').innerHTML=mBarDays.map(function(d){
+    return'<div style="flex:1;text-align:center;font-size:9px;color:'+(d.today?'var(--accent)':'var(--text3)')+';font-weight:'+(d.today?700:400)+'">'+d.label+'</div>';
+  }).join('');
+
+  // Tasks — clickable, fully expandable
   var statusOrder=['overdue','pending','done'];
   var tagged=mt.map(function(t){return{t:t,s:t.done?'done':isOverdue(t)?'overdue':'pending'};});
   tagged.sort(function(a,b){return statusOrder.indexOf(a.s)-statusOrder.indexOf(b.s);});
-  document.getElementById('mdm-tasks').innerHTML=tagged.length?tagged.map(function(x){
+  document.getElementById('mdm-tasks').innerHTML=tagged.length?tagged.map(function(x,idx){
     var t=x.t,s=x.s;
     var sColor=s==='done'?'var(--green)':s==='overdue'?'var(--red)':'var(--amber)';
     var sLabel=s==='done'?'✅ Done':s==='overdue'?'🔴 Overdue':'🟡 Pending';
-    var due=t.dueDate?new Date(t.dueDate).toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'No due date';
-    return`<div style="background:var(--bg2);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.title||'Untitled'}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${due}${t.isField?' · Field':''}</div>
-      </div>
-      <span style="font-size:11px;font-weight:600;color:${sColor};white-space:nowrap">${sLabel}</span>
-    </div>`;
-  }).join(''):'<div style="color:var(--text3);font-size:13px;padding:8px">No tasks assigned</div>';
+    var sBg=s==='done'?'rgba(34,197,94,.1)':s==='overdue'?'rgba(239,68,68,.1)':'rgba(245,158,11,.1)';
+    var due=t.dueDate?new Date(t.dueDate).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'No due date';
+    var pLabel={high:'🔴 High',medium:'🟡 Medium',low:'🟢 Low'}[t.priority]||t.priority||'—';
+    var photosHtml=(t.photos&&t.photos.length)?'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">'+t.photos.map(function(p){return'<img src="'+p+'" onclick="event.stopPropagation();openPhotoViewer(\''+p+'\')" style="width:70px;height:70px;object-fit:cover;border-radius:6px;border:1.5px solid var(--border2);cursor:zoom-in">';}).join('')+'</div>':'';
+    var detailId='mdm-det-'+idx;
+    return'<div style="background:var(--bg2);border-radius:10px;border:1px solid var(--border2);overflow:hidden">'
+      // Header — always visible, click to expand
+      +'<div onclick="var d=document.getElementById(\''+detailId+'\');var arr=this.querySelector(\'.mdm-arr\');if(d.style.display===\'none\'){d.style.display=\'\';arr.style.transform=\'rotate(90deg)\';}else{d.style.display=\'none\';arr.style.transform=\'\'}" style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer">'
+        +'<div style="flex:1;min-width:0">'
+          +'<div style="font-size:13px;font-weight:600;color:var(--text)">'+(t.title||'Untitled')+'</div>'
+          +'<div style="font-size:11px;color:var(--text3);margin-top:3px">'+due+(t.project?' · '+t.project:'')+(t.isField?' · Field':'')+'</div>'
+        +'</div>'
+        +'<span style="font-size:11px;font-weight:700;color:'+sColor+';background:'+sBg+';padding:3px 10px;border-radius:20px;white-space:nowrap">'+sLabel+'</span>'
+        +'<span class="mdm-arr" style="color:var(--text3);font-size:14px;transition:transform .2s;flex-shrink:0">›</span>'
+      +'</div>'
+      // Expandable detail
+      +'<div id="'+detailId+'" style="display:none;padding:0 14px 14px;border-top:1px solid var(--border2)">'
+        +(t.desc?'<div style="font-size:13px;color:var(--text2);line-height:1.65;padding:10px 12px;background:var(--bg3);border-radius:8px;border-left:3px solid var(--accent);margin-top:10px;white-space:pre-wrap">'+t.desc+'</div>':'')
+        +'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">'
+          +'<span style="font-size:11px;background:var(--bg3);color:var(--text3);padding:3px 10px;border-radius:6px">📌 '+pLabel+'</span>'
+          +(t.project?'<span style="font-size:11px;background:rgba(99,102,241,.15);color:#a5b4fc;padding:3px 10px;border-radius:6px">🏗 '+t.project+'</span>':'')
+          +(t.category?'<span style="font-size:11px;background:var(--bg3);color:var(--text3);padding:3px 10px;border-radius:6px">'+t.category+'</span>':'')
+          +(t.isField?'<span style="font-size:11px;background:rgba(38,198,218,.15);color:var(--teal);padding:3px 10px;border-radius:6px">📍 Field Job</span>':'')
+        +'</div>'
+        +photosHtml
+        +(isAdmin()?'<div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();closeModal(\'member-detail-modal\');openEditTask(\''+t.id+'\')">✏️ Edit</button><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();toggleDone(\''+t.id+'\');openMemberDetail(\''+m.id+'\')">'+( t.done?'↩️ Reopen':'✅ Mark Done')+'</button></div>':'')
+      +'</div>'
+    +'</div>';
+  }).join(''):'<div style="color:var(--text3);font-size:13px;padding:12px">No tasks assigned yet</div>';
   openModal('member-detail-modal');
 }
 function renderTeam(){
