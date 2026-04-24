@@ -498,26 +498,83 @@ textarea.fctl{resize:vertical;min-height:65px;}
       <div class="view active" id="view-dashboard">
         <!-- Admin dashboard stats -->
         <div id="admin-dash-stats">
-          <div class="sgrid">
-            <div class="scard"><div class="sl">Total Tasks</div><div class="sv" id="ds-total">0</div><div class="ss">all members</div></div>
-            <div class="scard green"><div class="sl">Completed</div><div class="sv" id="ds-done">0</div><div class="ss" id="ds-pct">0% rate</div></div>
-            <div class="scard amber"><div class="sl">Pending</div><div class="sv" id="ds-pending">0</div></div>
-            <div class="scard teal"><div class="sl">Field Jobs</div><div class="sv" id="ds-field">0</div><div class="ss">active on-site</div></div>
-          </div>
-          <div class="prow">
-            <div class="panel">
-              <div class="ph"><h3>Recent Tasks</h3><button class="btn btn-ghost btn-sm" onclick="showView('tasks',document.querySelectorAll('.nitem')[1])">View all</button></div>
-              <div class="pb" id="dash-recent"></div>
+          <!-- Top stat cards -->
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px" id="ds-cards-row">
+            <div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;border-bottom:3px solid var(--accent)">
+              <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Total Tasks</div>
+              <div style="font-size:28px;font-weight:800;font-family:var(--font-head);color:var(--text)" id="ds-total">0</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:4px">all members</div>
             </div>
-            <div>
-              <div class="panel" style="margin-bottom:14px">
-                <div class="ph"><h3>Team Progress</h3></div>
-                <div class="pb" id="dash-team" style="display:flex;flex-direction:column;gap:12px"></div>
+            <div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;border-bottom:3px solid var(--green)">
+              <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Completed</div>
+              <div style="font-size:28px;font-weight:800;font-family:var(--font-head);color:var(--green)" id="ds-done">0</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:4px" id="ds-pct">0% rate</div>
+            </div>
+            <div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;border-bottom:3px solid var(--amber)">
+              <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Pending</div>
+              <div style="font-size:28px;font-weight:800;font-family:var(--font-head);color:var(--amber)" id="ds-pending">0</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:4px">in progress</div>
+            </div>
+            <div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;border-bottom:3px solid var(--red)">
+              <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Overdue</div>
+              <div style="font-size:28px;font-weight:800;font-family:var(--font-head);color:var(--red)" id="ds-overdue">0</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:4px">need attention</div>
+            </div>
+            <div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;border-bottom:3px solid var(--teal)">
+              <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Field Jobs</div>
+              <div style="font-size:28px;font-weight:800;font-family:var(--font-head);color:var(--teal)" id="ds-field">0</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:4px">active on-site</div>
+            </div>
+          </div>
+          <!-- Charts row -->
+          <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:14px;margin-bottom:14px">
+            <!-- Bar chart: tasks per day this week -->
+            <div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:18px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                <div>
+                  <div style="font-size:13px;font-weight:700;color:var(--text)">Weekly Task Activity</div>
+                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Tasks created per day</div>
+                </div>
               </div>
-              <div class="panel">
-                <div class="ph"><h3>Activity</h3></div>
-                <div class="pb" style="max-height:200px;overflow-y:auto"><div id="dash-act"></div></div>
+              <div id="ds-barchart" style="display:flex;align-items:flex-end;gap:6px;height:90px;padding-bottom:2px"></div>
+              <div id="ds-barchart-labels" style="display:flex;gap:6px;margin-top:6px"></div>
+            </div>
+            <!-- Donut chart: priority breakdown -->
+            <div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:18px;display:flex;flex-direction:column">
+              <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">Task Priority</div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:14px">Breakdown by priority</div>
+              <div style="display:flex;align-items:center;gap:16px;flex:1">
+                <div id="ds-donut-wrap" style="position:relative;width:100px;height:100px;flex-shrink:0">
+                  <div id="ds-donut" style="width:100px;height:100px;border-radius:50%"></div>
+                  <div style="position:absolute;inset:18px;background:var(--card);border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">
+                    <div id="ds-donut-num" style="font-size:18px;font-weight:800;font-family:var(--font-head)">0</div>
+                    <div style="font-size:9px;color:var(--text3)">tasks</div>
+                  </div>
+                </div>
+                <div id="ds-priority-legend" style="display:flex;flex-direction:column;gap:8px;flex:1"></div>
               </div>
+            </div>
+            <!-- Overdue / deadline tasks -->
+            <div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:18px;display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                <div>
+                  <div style="font-size:13px;font-weight:700;color:var(--text)">Deadline Tasks</div>
+                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Overdue & due soon</div>
+                </div>
+                <button class="btn btn-ghost btn-sm" onclick="filterTasks('overdue',null);showView('tasks',document.querySelectorAll('.nitem')[1])">See all</button>
+              </div>
+              <div id="ds-deadline-list" style="display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1;max-height:130px"></div>
+            </div>
+          </div>
+          <!-- Bottom row: team + activity -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:18px">
+              <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px">Team Progress</div>
+              <div id="dash-team" style="display:flex;flex-direction:column;gap:12px"></div>
+            </div>
+            <div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:18px">
+              <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px">Activity Log</div>
+              <div style="max-height:200px;overflow-y:auto"><div id="dash-act"></div></div>
             </div>
           </div>
         </div>
@@ -3363,15 +3420,59 @@ function renderDashboard(){
   const visibleTasks = getVisibleTasks(); // role-filtered
 
   if(isAdmin()){
-    // ADMIN: aggregate stats across all tasks
     const total=db.tasks.length,done=db.tasks.filter(t=>t.done).length,field=db.tasks.filter(t=>t.isField).length;
+    const overdue=db.tasks.filter(t=>isOverdue(t)&&!t.done).length;
     document.getElementById('ds-total').textContent=total;
     document.getElementById('ds-done').textContent=done;
     document.getElementById('ds-pct').textContent=total?Math.round(done/total*100)+'% rate':'0% rate';
-    document.getElementById('ds-pending').textContent=total-done;
+    document.getElementById('ds-pending').textContent=total-done-overdue<0?0:total-done-overdue;
+    document.getElementById('ds-overdue').textContent=overdue;
     document.getElementById('ds-field').textContent=field;
-    const recent=[...db.tasks].sort((a,b)=>new Date(b.updatedAt)-new Date(a.updatedAt)).slice(0,5);
-    document.getElementById('dash-recent').innerHTML=recent.length?recent.map(t=>renderTaskItem(t,true)).join(''):'<div style="color:var(--text3);font-size:13px;padding:1rem 0;text-align:center">No tasks yet</div>';
+
+    // ── Bar chart: tasks created per day this week ──
+    var barDays=[];
+    for(var bi=6;bi>=0;bi--){var bd=new Date();bd.setDate(bd.getDate()-bi);var bds=bd.toISOString().split('T')[0];var bLabel=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][bd.getDay()];var bCount=db.tasks.filter(function(t){return(t.createdAt||'').slice(0,10)===bds;}).length;barDays.push({label:bLabel,count:bCount,today:bi===0});}
+    var maxB=Math.max.apply(null,barDays.map(function(d){return d.count;}))||1;
+    document.getElementById('ds-barchart').innerHTML=barDays.map(function(d){
+      var h=Math.max(Math.round(d.count/maxB*80),d.count?4:2);
+      var col=d.today?'var(--accent)':d.count?'rgba(99,102,241,0.45)':'var(--bg3)';
+      return'<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;justify-content:flex-end">'
+        +(d.count?'<div style="font-size:10px;color:var(--text3);font-weight:600">'+d.count+'</div>':'<div style="font-size:10px;color:transparent">0</div>')
+        +'<div style="width:100%;background:'+col+';border-radius:4px 4px 0 0;height:'+h+'px;transition:height .4s"></div>'
+      +'</div>';
+    }).join('');
+    document.getElementById('ds-barchart-labels').innerHTML=barDays.map(function(d){
+      return'<div style="flex:1;text-align:center;font-size:10px;color:'+(d.today?'var(--accent)':'var(--text3)')+';font-weight:'+(d.today?700:400)+'">'+d.label+'</div>';
+    }).join('');
+
+    // ── Donut chart: priority breakdown ──
+    var high=db.tasks.filter(function(t){return t.priority==='high'&&!t.done;}).length;
+    var med=db.tasks.filter(function(t){return t.priority==='medium'&&!t.done;}).length;
+    var low=db.tasks.filter(function(t){return t.priority==='low'&&!t.done;}).length;
+    var dTotal=high+med+low||1;
+    var hPct=Math.round(high/dTotal*100),mPct=Math.round(med/dTotal*100),lPct=100-hPct-mPct;
+    var gradient='conic-gradient(var(--red) 0% '+hPct+'%,var(--amber) '+hPct+'% '+(hPct+mPct)+'%,#6366f1 '+(hPct+mPct)+'% 100%)';
+    if(high===0&&med===0&&low===0)gradient='conic-gradient(var(--bg3) 0% 100%)';
+    document.getElementById('ds-donut').style.background=gradient;
+    document.getElementById('ds-donut-num').textContent=high+med+low;
+    document.getElementById('ds-priority-legend').innerHTML=
+      '<div style="display:flex;align-items:center;gap:8px"><div style="width:10px;height:10px;border-radius:3px;background:var(--red);flex-shrink:0"></div><span style="font-size:12px;color:var(--text2);flex:1">High</span><span style="font-size:12px;font-weight:700;color:var(--text)">'+high+'</span><span style="font-size:11px;color:var(--text3)">'+hPct+'%</span></div>'
+      +'<div style="display:flex;align-items:center;gap:8px"><div style="width:10px;height:10px;border-radius:3px;background:var(--amber);flex-shrink:0"></div><span style="font-size:12px;color:var(--text2);flex:1">Medium</span><span style="font-size:12px;font-weight:700;color:var(--text)">'+med+'</span><span style="font-size:11px;color:var(--text3)">'+mPct+'%</span></div>'
+      +'<div style="display:flex;align-items:center;gap:8px"><div style="width:10px;height:10px;border-radius:3px;background:#6366f1;flex-shrink:0"></div><span style="font-size:12px;color:var(--text2);flex:1">Low</span><span style="font-size:12px;font-weight:700;color:var(--text)">'+low+'</span><span style="font-size:11px;color:var(--text3)">'+lPct+'%</span></div>';
+
+    // ── Deadline tasks ──
+    var deadlines=[...db.tasks].filter(function(t){return !t.done&&(isOverdue(t)||t.dueDate);}).sort(function(a,b){return new Date(a.dueDate||'9999')-new Date(b.dueDate||'9999');}).slice(0,5);
+    document.getElementById('ds-deadline-list').innerHTML=deadlines.length?deadlines.map(function(t){
+      var ov=isOverdue(t);var owner=getMember(t.ownerId);
+      var dueStr=t.dueDate?new Date(t.dueDate).toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'No date';
+      return'<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border-radius:8px;border-left:3px solid '+(ov?'var(--red)':'var(--amber)')+'">'
+        +'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+t.title+'</div>'
+        +'<div style="font-size:11px;color:var(--text3);margin-top:1px">'+owner.name+' · '+dueStr+'</div></div>'
+        +'<span style="font-size:10px;font-weight:700;color:'+(ov?'var(--red)':'var(--amber)')+';white-space:nowrap">'+(ov?'Overdue':'Due soon')+'</span>'
+      +'</div>';
+    }).join(''):'<div style="color:var(--text3);font-size:13px;text-align:center;padding:1rem">No deadlines</div>';
+
+    // ── Team progress ──
     document.getElementById('dash-team').innerHTML=db.members.map(m=>{
       const mt=db.tasks.filter(t=>t.ownerId===m.id),md=mt.filter(t=>t.done).length,pct=mt.length?Math.round(md/mt.length*100):0;
       return`<div><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
@@ -3382,7 +3483,7 @@ function renderDashboard(){
         <span style="font-size:12px;font-weight:600;color:${pct===100?'var(--green)':pct>50?'var(--amber)':'var(--text2)'}">${pct}%</span>
       </div><div class="prog-wrap"><div class="prog-bar" style="width:${pct}%;background:${m.color}"></div></div></div>`;
     }).join('')||'<div style="color:var(--text3);font-size:13px">No members yet</div>';
-    const acts=db.activity.slice(0,6);
+    const acts=db.activity.slice(0,8);
     document.getElementById('dash-act').innerHTML=acts.map(a=>`<div class="act-item"><div class="act-dot" style="background:${a.type==='success'?'var(--green)':a.type==='warning'?'var(--amber)':'var(--accent)'}"></div><div><div class="act-text">${a.msg}</div><div class="act-time">${fmtAgo(a.time)}</div></div></div>`).join('')||'<div style="color:var(--text3);font-size:13px">No activity yet</div>';
   } else {
     // EMPLOYEE: show only tasks assigned to this user
