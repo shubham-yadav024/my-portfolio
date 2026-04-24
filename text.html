@@ -3856,7 +3856,7 @@ function openMemberDetail(id){
         +'<div style="display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border2)">'
           +(isAdmin()?'<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();closeModal(\'member-detail-modal\');openEditTask(\''+t.id+'\')">✏️ Edit Task</button>':'')
           +'<button class="btn btn-sm" style="background:'+(t.done?'rgba(245,158,11,.15)':'rgba(34,197,94,.15)')+';color:'+(t.done?'var(--amber)':'var(--green)')+';border:1px solid '+(t.done?'var(--amber)':'var(--green)')+'" onclick="event.stopPropagation();toggleDone(\''+t.id+'\');setTimeout(function(){openMemberDetail(\''+id+'\');},100)">'+(t.done?'↩️ Reopen':'✅ Mark Done')+'</button>'
-        +'</div>')
+        +'</div>'
       +'</div>'
     +'</div>';
   }).join(''):'<div style="color:var(--text3);font-size:13px;padding:16px;text-align:center">No tasks assigned yet</div>';
