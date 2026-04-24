@@ -1007,9 +1007,11 @@ textarea.fctl{resize:vertical;min-height:65px;}
           <div style="font-size:11px;color:var(--text3);margin-top:2px">Overdue</div>
         </div>
       </div>
+      <!-- Progress chart -->
+      <div id="mdm-chart" style="margin-bottom:1.25rem"></div>
       <!-- Task list -->
       <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Tasks</div>
-      <div id="mdm-tasks" style="display:flex;flex-direction:column;gap:8px;max-height:380px;overflow-y:auto"></div>
+      <div id="mdm-tasks" style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto"></div>
     </div>
   </div>
 </div>
@@ -3398,7 +3400,7 @@ function renderDashboard(){
 }
 
 function renderTaskList(){
-  let tasks=[...getVisibleTasks()]; // role-filtered
+  let tasks=[...getVisibleTasks()];
   const srch=document.getElementById('gsearch').value.toLowerCase();
   if(srch)tasks=tasks.filter(t=>t.title.toLowerCase().includes(srch)||getMember(t.ownerId).name.toLowerCase().includes(srch)||(t.fieldJob&&t.fieldJob.customer&&t.fieldJob.customer.toLowerCase().includes(srch))||(t.fieldJob&&t.fieldJob.site&&t.fieldJob.site.toLowerCase().includes(srch)));
   if(taskFilter==='pending')tasks=tasks.filter(t=>!t.done);
@@ -3409,7 +3411,61 @@ function renderTaskList(){
   if(taskFilter==='high')tasks=tasks.filter(t=>t.priority==='high');
   tasks.sort((a,b)=>{if(a.done!==b.done)return a.done?1:-1;const p={high:0,medium:1,low:2};if(p[a.priority]!==p[b.priority])return p[a.priority]-p[b.priority];return new Date(a.dueDate||'9999')-new Date(b.dueDate||'9999');});
   document.getElementById('tcount').textContent=tasks.length+' task'+(tasks.length!==1?'s':'');
-  document.getElementById('main-tlist').innerHTML=tasks.length?tasks.map(t=>renderTaskItem(t,false)).join(''):'<div style="color:var(--text3);text-align:center;padding:2rem;font-size:14px">No tasks found</div>';
+  if(!tasks.length){document.getElementById('main-tlist').innerHTML='<div style="color:var(--text3);text-align:center;padding:2rem;font-size:14px">No tasks found</div>';return;}
+
+  // Admin/Reviewer: group by owner with clickable header
+  if(isAdmin()||isReviewer()){
+    // Collect unique owners in order of who has most pending first
+    var ownerMap={};
+    tasks.forEach(function(t){
+      var oid=t.ownerId||'unassigned';
+      if(!ownerMap[oid])ownerMap[oid]=[];
+      ownerMap[oid].push(t);
+    });
+    var ownerIds=Object.keys(ownerMap).sort(function(a,b){
+      var aOver=ownerMap[a].filter(function(t){return isOverdue(t)&&!t.done;}).length;
+      var bOver=ownerMap[b].filter(function(t){return isOverdue(t)&&!t.done;}).length;
+      if(bOver!==aOver)return bOver-aOver;
+      var aPend=ownerMap[a].filter(function(t){return!t.done;}).length;
+      var bPend=ownerMap[b].filter(function(t){return!t.done;}).length;
+      return bPend-aPend;
+    });
+    document.getElementById('main-tlist').innerHTML=ownerIds.map(function(oid){
+      var m=getMember(oid);
+      var mt=ownerMap[oid];
+      var done=mt.filter(function(t){return t.done;}).length;
+      var overdue=mt.filter(function(t){return!t.done&&isOverdue(t);}).length;
+      var pending=mt.filter(function(t){return!t.done&&!isOverdue(t);}).length;
+      var pct=mt.length?Math.round(done/mt.length*100):0;
+      var barCol=pct===100?'var(--green)':overdue>0?'var(--red)':'var(--accent)';
+      return'<div style="margin-bottom:20px">'
+        // Clickable person header
+        +'<div onclick="openMemberDetail(\''+oid+'\')" style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--card);border:1px solid var(--border2);border-radius:12px 12px 0 0;cursor:pointer;transition:background .15s" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'var(--card)\'">'
+          +'<div class="oavatar" style="background:'+m.color+';width:38px;height:38px;font-size:14px;flex-shrink:0">'+initials(m.name)+'</div>'
+          +'<div style="flex:1;min-width:0">'
+            +'<div style="font-size:14px;font-weight:700;color:var(--text)">'+m.name+'</div>'
+            +'<div style="font-size:11px;color:var(--text3);margin-top:1px">'+(m.role||'Team Member')+'</div>'
+          +'</div>'
+          +'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
+            +(overdue>0?'<span style="font-size:11px;font-weight:700;color:var(--red);background:rgba(239,68,68,.12);padding:3px 8px;border-radius:6px">🔴 '+overdue+' Overdue</span>':'')
+            +(pending>0?'<span style="font-size:11px;font-weight:600;color:var(--amber);background:rgba(245,158,11,.12);padding:3px 8px;border-radius:6px">🟡 '+pending+' Pending</span>':'')
+            +'<span style="font-size:11px;font-weight:600;color:var(--green);background:rgba(34,197,94,.12);padding:3px 8px;border-radius:6px">✅ '+done+' Done</span>'
+            +'<span style="font-size:11px;color:var(--text3)">'+mt.length+' total</span>'
+          +'</div>'
+          +'<div style="font-size:12px;color:var(--text3);margin-left:4px">→</div>'
+        +'</div>'
+        // Progress bar strip
+        +'<div style="height:4px;background:var(--bg3);border-radius:0"><div style="height:4px;width:'+pct+'%;background:'+barCol+';border-radius:0;transition:width .4s"></div></div>'
+        // Tasks for this person
+        +'<div style="border:1px solid var(--border2);border-top:none;border-radius:0 0 12px 12px;overflow:hidden">'
+          +mt.map(function(t){return renderTaskItem(t,false);}).join('')
+        +'</div>'
+      +'</div>';
+    }).join('');
+  } else {
+    // Employee: flat list (only their own tasks)
+    document.getElementById('main-tlist').innerHTML=tasks.map(t=>renderTaskItem(t,false)).join('');
+  }
 }
 
 function renderFieldJobs(){
@@ -3513,6 +3569,32 @@ function openMemberDetail(id){
   document.getElementById('mdm-done').textContent=done.length;
   document.getElementById('mdm-pending').textContent=pending.length;
   document.getElementById('mdm-overdue').textContent=overdue.length;
+  // Visual chart
+  var total=mt.length||1;
+  var dPct=Math.round(done.length/total*100);
+  var pPct=Math.round(pending.length/total*100);
+  var oPct=Math.round(overdue.length/total*100);
+  document.getElementById('mdm-chart').innerHTML=
+    '<div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Progress Overview</div>'
+    +'<div style="background:var(--bg2);border-radius:10px;padding:16px">'
+    // Stacked bar
+    +'<div style="display:flex;height:18px;border-radius:8px;overflow:hidden;gap:2px;margin-bottom:14px">'
+      +(done.length?'<div style="flex:'+done.length+';background:var(--green);border-radius:6px 0 0 6px;transition:flex .4s" title="Done: '+done.length+'"></div>':'')
+      +(pending.length?'<div style="flex:'+pending.length+';background:var(--amber);transition:flex .4s" title="Pending: '+pending.length+'"></div>':'')
+      +(overdue.length?'<div style="flex:'+overdue.length+';background:var(--red);border-radius:0 6px 6px 0;transition:flex .4s" title="Overdue: '+overdue.length+'"></div>':'')
+      +(!mt.length?'<div style="flex:1;background:var(--bg3);border-radius:8px"></div>':'')
+    +'</div>'
+    // Labels with bar rows
+    +[{label:'Completed',count:done.length,pct:dPct,col:'var(--green)'},{label:'Pending',count:pending.length,pct:pPct,col:'var(--amber)'},{label:'Overdue',count:overdue.length,pct:oPct,col:'var(--red)'}].map(function(r){
+      return'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
+        +'<div style="width:80px;font-size:12px;color:var(--text2)">'+r.label+'</div>'
+        +'<div style="flex:1;height:8px;background:var(--bg3);border-radius:4px;overflow:hidden">'
+          +'<div style="height:8px;width:'+r.pct+'%;background:'+r.col+';border-radius:4px;transition:width .5s"></div>'
+        +'</div>'
+        +'<div style="width:48px;font-size:12px;color:var(--text3);text-align:right">'+r.count+' ('+r.pct+'%)</div>'
+      +'</div>';
+    }).join('')
+    +'</div>';
   var statusOrder=['overdue','pending','done'];
   var tagged=mt.map(function(t){return{t:t,s:t.done?'done':isOverdue(t)?'overdue':'pending'};});
   tagged.sort(function(a,b){return statusOrder.indexOf(a.s)-statusOrder.indexOf(b.s);});
