@@ -2969,7 +2969,7 @@ async function syncFromDB(){
     if(typeof renderAll==='function')renderAll();
   }catch(err){}
 }
-document.addEventListener('DOMContentLoaded',()=>{if(AuthAPI.isLoggedIn()){syncFromDB();setInterval(syncFromDB,5000);setInterval(function(){if(typeof renderTaskList==='function')renderTaskList();if(typeof renderDashboard==='function')renderDashboard();},1000);setInterval(_checkStorageUsage,60000);setTimeout(_checkStorageUsage,5000);}});
+document.addEventListener('DOMContentLoaded',()=>{if(AuthAPI.isLoggedIn()){syncFromDB();setInterval(syncFromDB,5000);setInterval(function(){if(typeof renderTaskList==='function')renderTaskList();if(typeof renderDashboard==='function')renderDashboard();var accV=document.getElementById('view-account');if(accV&&accV.style.display!=='none'&&typeof renderAccountList==='function')renderAccountList();},1000);setInterval(function(){var accV=document.getElementById('view-account');if(accV&&accV.style.display!=='none')syncAccountFromSupabase();},5000);setInterval(_checkStorageUsage,60000);setTimeout(_checkStorageUsage,5000);}});
 
 // ═══ PRESENCE ═══
 let presenceChannel=null;let onlineUserIds=new Set();
@@ -3300,7 +3300,7 @@ function showView(name,el){
     if(dtEl&&!dtEl.value)dtEl.value=new Date().toISOString().split('T')[0];
     renderDailyTask();
   }
-  if(name==='account'){if(!db.accountEntries)db.accountEntries=[];switchAccTab(_accTab);}
+  if(name==='account'){if(!db.accountEntries)db.accountEntries=[];switchAccTab(_accTab);syncAccountFromSupabase();}
 }
 function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('soverlay').classList.toggle('open');}
 function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('soverlay').classList.remove('open');}
@@ -4210,6 +4210,45 @@ function _showStorageWarn(pct,threshold){
 var _accTab='PUSHP';
 var _accPhotos=[];
 var _accFiles=[];
+var _accSupaClient=null;
+var _accSyncRunning=false;
+
+async function _getAccSupa(){
+  if(_accSupaClient)return _accSupaClient;
+  var mod=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+  _accSupaClient=mod.createClient(_SUPA_URL,_SUPA_KEY);
+  return _accSupaClient;
+}
+
+async function syncAccountFromSupabase(){
+  if(_accSyncRunning)return;
+  _accSyncRunning=true;
+  try{
+    var supa=await _getAccSupa();
+    var res=await supa.from('account_entries').select('*').order('created_at',{ascending:false});
+    if(res.error)throw res.error;
+    if(!db.accountEntries)db.accountEntries=[];
+    var remote=res.data.map(function(e){return{id:e.id,account:e.account,title:e.title,desc:e.description,date:e.date,priority:e.priority||'medium',photos:e.photos||[],files:e.files||[],createdBy:e.created_by,createdAt:e.created_at,updatedAt:e.updated_at};});
+    // Merge: keep local entries not yet synced
+    var remoteIds=new Set(remote.map(function(e){return e.id;}));
+    var localOnly=(db.accountEntries||[]).filter(function(e){return !remoteIds.has(e.id)&&e._localOnly;});
+    db.accountEntries=[...remote,...localOnly];
+    saveDB();
+    var accView=document.getElementById('view-account');
+    if(accView&&accView.style.display!=='none')renderAccountList();
+  }catch(e){}finally{_accSyncRunning=false;}
+}
+
+async function _saveAccToSupabase(entry){
+  try{
+    var supa=await _getAccSupa();
+    await supa.from('account_entries').upsert({id:entry.id,account:entry.account,title:entry.title,description:entry.desc,date:entry.date||null,priority:entry.priority,photos:entry.photos,files:entry.files,created_by:entry.createdBy,created_at:entry.createdAt,updated_at:entry.updatedAt});
+  }catch(e){}
+}
+
+async function _deleteAccFromSupabase(id){
+  try{var supa=await _getAccSupa();await supa.from('account_entries').delete().eq('id',id);}catch(e){}
+}
 
 function switchAccTab(tab){
   _accTab=tab;
@@ -4308,30 +4347,38 @@ function _fmtFileSize(bytes){if(bytes<1024)return bytes+'B';if(bytes<1048576)ret
 function saveAccountEntry(){
   var title=document.getElementById('acc-title').value.trim();
   if(!title){toast('Entry title required','warning');return;}
+  var editId=document.getElementById('acc-edit-id').value;
+  var existing=(db.accountEntries||[]).find(function(x){return x.id===editId;});
   var entry={
-    id:document.getElementById('acc-edit-id').value||uid(),
+    id:editId||uid(),
     account:document.getElementById('acc-account').value,
     title:title,
-    desc:document.getElementById('acc-desc').value.trim(),
+    desc:document.getElementById('acc-desc').value,
     date:document.getElementById('acc-date').value,
     priority:document.getElementById('acc-priority').value,
     photos:_accPhotos.filter(function(p){return p!==null;}),
     files:_accFiles,
     createdBy:currentUser?currentUser.name:'',
-    createdAt:document.getElementById('acc-edit-id').value?((db.accountEntries||[]).find(function(x){return x.id===document.getElementById('acc-edit-id').value;})||{}).createdAt||now():now(),
-    updatedAt:now()
+    createdAt:existing?existing.createdAt:now(),
+    updatedAt:now(),
+    _localOnly:true
   };
   if(!db.accountEntries)db.accountEntries=[];
   var idx=db.accountEntries.findIndex(function(x){return x.id===entry.id;});
   if(idx>=0)db.accountEntries[idx]=entry;else db.accountEntries.push(entry);
   saveDB();closeModal('account-modal');toast('Entry saved!','success');
   _accTab=entry.account;switchAccTab(_accTab);renderAccountList();
+  _saveAccToSupabase(entry).then(function(){
+    var i=db.accountEntries.findIndex(function(x){return x.id===entry.id;});
+    if(i>=0){db.accountEntries[i]._localOnly=false;saveDB();}
+  });
 }
 
 function deleteAccountEntry(id){
   if(!confirm('Delete this entry?'))return;
   db.accountEntries=(db.accountEntries||[]).filter(function(x){return x.id!==id;});
   saveDB();renderAccountList();toast('Deleted','warning');
+  _deleteAccFromSupabase(id);
 }
 
 function renderAccountList(){
