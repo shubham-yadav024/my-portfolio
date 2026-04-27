@@ -436,6 +436,7 @@ textarea.fctl{resize:vertical;min-height:65px;}
       <div class="snav-section">
         <div class="snav-lbl">Management</div>
         <div class="nitem" onclick="showView('dailytask',this)"><span class="ni">📸</span>Daily Task</div>
+        <div class="nitem admin-only" onclick="showView('account',this)"><span class="ni">📁</span>Account</div>
         <div class="nitem admin-only" onclick="showView('analytics',this)"><span class="ni">📊</span>Analytics</div>
         <div class="nitem admin-only" onclick="showView('attendance',this)"><span class="ni">📅</span>Attendance</div>
         <div class="nitem admin-only" onclick="showView('team',this)"><span class="ni">👥</span>Team Members</div>
@@ -867,6 +868,24 @@ textarea.fctl{resize:vertical;min-height:65px;}
         <div id="daily-task-list" style="display:flex;flex-direction:column;gap:16px"></div>
       </div>
 
+      <!-- ACCOUNT VIEW -->
+      <div class="view" id="view-account">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:10px">
+          <div>
+            <h2 style="font-family:var(--font-head);font-size:18px;font-weight:700">📁 Account</h2>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px">PUSHP · BIDHYE · SOM — documents, photos & tasks</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openAccountModal()">+ Add Entry</button>
+        </div>
+        <!-- Tabs -->
+        <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border2);padding-bottom:0">
+          <button id="acc-tab-PUSHP" onclick="switchAccTab('PUSHP')" style="padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:var(--accent);border-bottom:2px solid var(--accent);margin-bottom:-2px">PUSHP</button>
+          <button id="acc-tab-BIDHYE" onclick="switchAccTab('BIDHYE')" style="padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:var(--text3);border-bottom:2px solid transparent;margin-bottom:-2px">BIDHYE</button>
+          <button id="acc-tab-SOM" onclick="switchAccTab('SOM')" style="padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:var(--text3);border-bottom:2px solid transparent;margin-bottom:-2px">SOM</button>
+        </div>
+        <div id="acc-entry-list" style="display:flex;flex-direction:column;gap:14px"></div>
+      </div>
+
       <!-- DIRECT MESSAGES VIEW -->
       <div class="view" id="view-dm">
         <div style="display:flex;height:calc(100vh - 120px);overflow:hidden;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--card)">
@@ -1096,6 +1115,75 @@ textarea.fctl{resize:vertical;min-height:65px;}
       <!-- Task list -->
       <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">All Tasks — Click to Expand Full Detail</div>
       <div id="mdm-tasks" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ACCOUNT ENTRY MODAL -->
+<div class="moverlay" id="account-modal" onclick="if(event.target===this)closeModal('account-modal')">
+  <div class="modal" style="max-width:620px">
+    <div class="mhead">
+      <h2 id="acc-modal-title">Add Account Entry</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('account-modal')">✕</button>
+    </div>
+    <div class="mbody">
+      <input type="hidden" id="acc-edit-id"/>
+      <div class="fgrid">
+        <div class="fg">
+          <label class="flbl">Account / Title</label>
+          <select class="fctl" id="acc-account">
+            <option value="PUSHP">PUSHP</option>
+            <option value="BIDHYE">BIDHYE</option>
+            <option value="SOM">SOM</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="flbl">Entry Title</label>
+          <input class="fctl" id="acc-title" placeholder="e.g. Invoice #123, Payment receipt..."/>
+        </div>
+      </div>
+      <div class="fgrid full">
+        <div class="fg">
+          <label class="flbl">Description</label>
+          <textarea class="fctl" id="acc-desc" rows="4" placeholder="Full details, notes, amounts, references..."></textarea>
+        </div>
+      </div>
+      <div class="fgrid">
+        <div class="fg">
+          <label class="flbl">Date</label>
+          <input class="fctl" type="date" id="acc-date"/>
+        </div>
+        <div class="fg">
+          <label class="flbl">Priority</label>
+          <select class="fctl" id="acc-priority">
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+      </div>
+      <!-- Photos -->
+      <div class="fgrid full"><div class="fg">
+        <label class="flbl">📷 Photos</label>
+        <div id="acc-photo-preview" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"></div>
+        <label style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg3);border:1.5px dashed var(--border2);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text3)">
+          <span style="font-size:18px">📷</span> Click to add photos
+          <input type="file" id="acc-photos" accept="image/*" multiple style="display:none" onchange="handleAccPhotoUpload(this)"/>
+        </label>
+      </div></div>
+      <!-- Files -->
+      <div class="fgrid full"><div class="fg">
+        <label class="flbl">📎 Files (PDF, Excel, Word, etc.)</label>
+        <div id="acc-file-preview" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+        <label style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg3);border:1.5px dashed var(--border2);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text3)">
+          <span style="font-size:18px">📎</span> Click to attach files
+          <input type="file" id="acc-files" multiple style="display:none" onchange="handleAccFileUpload(this)"/>
+        </label>
+      </div></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+        <button class="btn btn-ghost" onclick="closeModal('account-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveAccountEntry()">Save Entry</button>
+      </div>
     </div>
   </div>
 </div>
@@ -3192,7 +3280,7 @@ function showView(name,el){
   document.querySelectorAll('.nitem').forEach(n=>n.classList.remove('active'));
   document.getElementById('view-'+name).classList.add('active');
   if(el)el.classList.add('active');
- const titles={dashboard:'Dashboard',tasks:isAdmin()?'All Tasks':'My Tasks',field:'Field Jobs',escalation:'Escalation Matrix',analytics:'Analytics',attendance:'Attendance',team:'Team Members',activity:'Activity Log',chat:'Group Chat',dm:'Direct Messages',dailytask:'Daily Task'};
+ const titles={dashboard:'Dashboard',tasks:isAdmin()?'All Tasks':'My Tasks',field:'Field Jobs',escalation:'Escalation Matrix',analytics:'Analytics',attendance:'Attendance',team:'Team Members',activity:'Activity Log',chat:'Group Chat',dm:'Direct Messages',dailytask:'Daily Task',account:'Account'};
   document.getElementById('tbar-title').textContent=titles[name]||'Pushp CI Tasks';
   document.getElementById('export-wrap').style.display=(isAdmin()&&(name==='tasks'||name==='analytics'||name==='dashboard'))?'':'none';
   closeSidebar();
@@ -3212,6 +3300,7 @@ function showView(name,el){
     if(dtEl&&!dtEl.value)dtEl.value=new Date().toISOString().split('T')[0];
     renderDailyTask();
   }
+  if(name==='account'){if(!db.accountEntries)db.accountEntries=[];switchAccTab(_accTab);}
 }
 function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('soverlay').classList.toggle('open');}
 function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('soverlay').classList.remove('open');}
@@ -4115,6 +4204,168 @@ function _showStorageWarn(pct,threshold){
     +'<button onclick="if(confirm(\'Sab purana local data delete hoga. Account logout nahi hoga. Continue?\')){var u=localStorage.getItem(\'taskflow_user\');localStorage.clear();if(u)localStorage.setItem(\'taskflow_user\',u);location.reload();}" style="padding:10px 18px;background:'+col+';border:none;border-radius:8px;color:#fff;font-weight:600;cursor:pointer;font-size:13px">Storage Clear Karo</button>'
     +'</div></div>';
   document.body.appendChild(ov);
+}
+
+// ═══ ACCOUNT SECTION ═══
+var _accTab='PUSHP';
+var _accPhotos=[];
+var _accFiles=[];
+
+function switchAccTab(tab){
+  _accTab=tab;
+  ['PUSHP','BIDHYE','SOM'].forEach(function(t){
+    var btn=document.getElementById('acc-tab-'+t);
+    if(!btn)return;
+    if(t===tab){btn.style.color='var(--accent)';btn.style.borderBottomColor='var(--accent)';}
+    else{btn.style.color='var(--text3)';btn.style.borderBottomColor='transparent';}
+  });
+  renderAccountList();
+}
+
+function openAccountModal(editId){
+  _accPhotos=[];_accFiles=[];
+  document.getElementById('acc-photo-preview').innerHTML='';
+  document.getElementById('acc-file-preview').innerHTML='';
+  document.getElementById('acc-edit-id').value='';
+  document.getElementById('acc-title').value='';
+  document.getElementById('acc-desc').value='';
+  document.getElementById('acc-date').value=new Date().toISOString().split('T')[0];
+  document.getElementById('acc-priority').value='medium';
+  document.getElementById('acc-account').value=_accTab;
+  document.getElementById('acc-modal-title').textContent='Add Account Entry';
+  if(editId){
+    var e=(db.accountEntries||[]).find(function(x){return x.id===editId;});
+    if(e){
+      document.getElementById('acc-edit-id').value=editId;
+      document.getElementById('acc-modal-title').textContent='Edit Entry';
+      document.getElementById('acc-account').value=e.account||_accTab;
+      document.getElementById('acc-title').value=e.title||'';
+      document.getElementById('acc-desc').value=e.desc||'';
+      document.getElementById('acc-date').value=e.date||'';
+      document.getElementById('acc-priority').value=e.priority||'medium';
+      _accPhotos=[...(e.photos||[])];
+      _accFiles=[...(e.files||[])];
+      // Show existing photos
+      var pp=document.getElementById('acc-photo-preview');
+      (_accPhotos).forEach(function(p,i){
+        var wrap=document.createElement('div');wrap.style.cssText='position:relative;width:72px;height:72px;flex-shrink:0';
+        var img=document.createElement('img');img.src=p;img.style.cssText='width:72px;height:72px;object-fit:cover;border-radius:8px;border:2px solid var(--border2)';
+        wrap.appendChild(img);pp.appendChild(wrap);
+      });
+      // Show existing files
+      var fp=document.getElementById('acc-file-preview');
+      (_accFiles).forEach(function(f){fp.innerHTML+='<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg3);border-radius:6px"><span style="font-size:16px">📄</span><span style="font-size:12px;color:var(--text2);flex:1">'+f.name+'</span><span style="font-size:11px;color:var(--text3)">'+f.size+'</span></div>';});
+    }
+  }
+  openModal('account-modal');
+}
+
+function handleAccPhotoUpload(input){
+  var files=Array.from(input.files);if(!files.length)return;
+  var preview=document.getElementById('acc-photo-preview');
+  files.forEach(function(file){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var img=new Image();
+      img.onload=function(){
+        var compressed=_smartCompress(img);
+        var wrap=document.createElement('div');wrap.style.cssText='position:relative;width:72px;height:72px;flex-shrink:0';
+        var thumb=document.createElement('img');thumb.src=compressed.b64;thumb.style.cssText='width:72px;height:72px;object-fit:cover;border-radius:8px;border:2px solid var(--border2)';
+        var spin=document.createElement('div');spin.style.cssText='position:absolute;inset:0;background:rgba(0,0,0,.4);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px';spin.innerHTML='⏳';
+        var del=document.createElement('button');del.innerHTML='✕';del.style.cssText='position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;border:none;border-radius:50%;width:16px;height:16px;font-size:9px;cursor:pointer;display:none';
+        wrap.appendChild(thumb);wrap.appendChild(spin);wrap.appendChild(del);preview.appendChild(wrap);
+        var idx=_accPhotos.length;_accPhotos.push(null);
+        _uploadPhoto(compressed.b64,compressed.mime).then(function(url){_accPhotos[idx]=url;spin.remove();del.style.display='';del.onclick=function(){_accPhotos[idx]=null;wrap.remove();};});
+      };img.src=e.target.result;
+    };reader.readAsDataURL(file);
+  });input.value='';
+}
+
+async function handleAccFileUpload(input){
+  var files=Array.from(input.files);if(!files.length)return;
+  var preview=document.getElementById('acc-file-preview');
+  for(var i=0;i<files.length;i++){
+    var file=files[i];
+    var row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg3);border-radius:6px;border:1px solid var(--border2)';
+    row.innerHTML='<span style="font-size:16px">⏳</span><span style="font-size:12px;color:var(--text2);flex:1">'+file.name+'</span><span style="font-size:11px;color:var(--text3)">'+_fmtFileSize(file.size)+'</span>';
+    preview.appendChild(row);
+    try{
+      var fname='files/'+Date.now()+'_'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+      var res=await fetch(_SUPA_URL+'/storage/v1/object/'+_PHOTO_BUCKET+'/'+fname,{method:'POST',headers:{'Authorization':'Bearer '+_SUPA_KEY,'Content-Type':file.type||'application/octet-stream','x-upsert':'true'},body:file});
+      if(res.ok){
+        var url=_SUPA_URL+'/storage/v1/object/public/'+_PHOTO_BUCKET+'/'+fname;
+        _accFiles.push({name:file.name,url:url,size:_fmtFileSize(file.size),type:file.type});
+        row.innerHTML='<span style="font-size:16px">📄</span><span style="font-size:12px;color:var(--text2);flex:1">'+file.name+'</span><span style="font-size:11px;color:var(--green)">✓ Uploaded</span>';
+      }else{row.innerHTML='<span style="font-size:16px">❌</span><span style="font-size:12px;color:var(--red);flex:1">'+file.name+' — Upload failed</span>';}
+    }catch(e){row.innerHTML='<span style="font-size:16px">❌</span><span style="font-size:12px;color:var(--red);flex:1">'+file.name+' — Error</span>';}
+  }
+  input.value='';
+}
+
+function _fmtFileSize(bytes){if(bytes<1024)return bytes+'B';if(bytes<1048576)return Math.round(bytes/1024)+'KB';return(bytes/1048576).toFixed(1)+'MB';}
+
+function saveAccountEntry(){
+  var title=document.getElementById('acc-title').value.trim();
+  if(!title){toast('Entry title required','warning');return;}
+  var entry={
+    id:document.getElementById('acc-edit-id').value||uid(),
+    account:document.getElementById('acc-account').value,
+    title:title,
+    desc:document.getElementById('acc-desc').value.trim(),
+    date:document.getElementById('acc-date').value,
+    priority:document.getElementById('acc-priority').value,
+    photos:_accPhotos.filter(function(p){return p!==null;}),
+    files:_accFiles,
+    createdBy:currentUser?currentUser.name:'',
+    createdAt:document.getElementById('acc-edit-id').value?((db.accountEntries||[]).find(function(x){return x.id===document.getElementById('acc-edit-id').value;})||{}).createdAt||now():now(),
+    updatedAt:now()
+  };
+  if(!db.accountEntries)db.accountEntries=[];
+  var idx=db.accountEntries.findIndex(function(x){return x.id===entry.id;});
+  if(idx>=0)db.accountEntries[idx]=entry;else db.accountEntries.push(entry);
+  saveDB();closeModal('account-modal');toast('Entry saved!','success');
+  _accTab=entry.account;switchAccTab(_accTab);renderAccountList();
+}
+
+function deleteAccountEntry(id){
+  if(!confirm('Delete this entry?'))return;
+  db.accountEntries=(db.accountEntries||[]).filter(function(x){return x.id!==id;});
+  saveDB();renderAccountList();toast('Deleted','warning');
+}
+
+function renderAccountList(){
+  var entries=(db.accountEntries||[]).filter(function(e){return e.account===_accTab;});
+  entries.sort(function(a,b){return new Date(b.createdAt)-new Date(a.createdAt);});
+  var el=document.getElementById('acc-entry-list');if(!el)return;
+  if(!entries.length){el.innerHTML='<div style="text-align:center;color:var(--text3);padding:3rem;font-size:14px">No entries yet for '+_accTab+' — click "+ Add Entry" to start</div>';return;}
+  var pColors={high:'var(--red)',medium:'var(--amber)',low:'var(--green)'};
+  el.innerHTML=entries.map(function(e){
+    var dateStr=e.date?new Date(e.date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'';
+    var photosHtml=(e.photos&&e.photos.length)?'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">'+e.photos.map(function(p){return'<img src="'+p+'" onclick="openPhotoViewer(\''+p+'\')" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:2px solid var(--border2);cursor:zoom-in">';}).join('')+'</div>':'';
+    var filesHtml=(e.files&&e.files.length)?'<div style="display:flex;flex-direction:column;gap:6px;margin-top:10px">'+e.files.map(function(f){return'<a href="'+f.url+'" target="_blank" download style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border2);text-decoration:none;color:var(--text)"><span style="font-size:18px">📄</span><span style="font-size:12px;flex:1;font-weight:500">'+f.name+'</span><span style="font-size:11px;color:var(--text3)">'+f.size+'</span><span style="font-size:11px;color:var(--accent);font-weight:600">⬇ Download</span></a>';}).join('')+'</div>':'';
+    return'<div style="background:var(--card);border:1px solid var(--border2);border-radius:14px;padding:18px 20px;border-left:4px solid '+(pColors[e.priority]||'var(--accent)')+'">'
+      +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px">'
+        +'<div style="flex:1;min-width:0">'
+          +'<div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">'+e.title+'</div>'
+          +'<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">'
+            +'<span style="font-size:11px;font-weight:700;color:'+(pColors[e.priority]||'var(--accent)')+';background:'+( e.priority==='high'?'rgba(239,68,68,.12)':e.priority==='low'?'rgba(34,197,94,.12)':'rgba(245,158,11,.12)')+';padding:2px 8px;border-radius:6px">'+({high:'🔴 High',medium:'🟡 Medium',low:'🟢 Low'}[e.priority]||e.priority)+'</span>'
+            +(dateStr?'<span style="font-size:11px;color:var(--text3)">📅 '+dateStr+'</span>':'')
+            +(e.createdBy?'<span style="font-size:11px;color:var(--text3)">👤 '+e.createdBy+'</span>':'')
+            +((e.photos&&e.photos.length)?'<span style="font-size:11px;color:var(--text3)">📷 '+e.photos.length+' photo'+(e.photos.length>1?'s':'')+'</span>':'')
+            +((e.files&&e.files.length)?'<span style="font-size:11px;color:var(--text3)">📎 '+e.files.length+' file'+(e.files.length>1?'s':'')+'</span>':'')
+          +'</div>'
+        +'</div>'
+        +'<div style="display:flex;gap:6px;flex-shrink:0">'
+          +'<button class="btn btn-ghost btn-sm" onclick="openAccountModal(\''+e.id+'\')">✏️</button>'
+          +'<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteAccountEntry(\''+e.id+'\')">🗑</button>'
+        +'</div>'
+      +'</div>'
+      +(e.desc?'<div style="font-size:13px;color:var(--text2);line-height:1.7;padding:10px 12px;background:var(--bg3);border-radius:8px;border-left:3px solid var(--accent);white-space:pre-wrap;margin-bottom:2px">'+e.desc+'</div>':'')
+      +photosHtml
+      +filesHtml
+    +'</div>';
+  }).join('');
 }
 
 // ═══ DAILY TASK ═══
