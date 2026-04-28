@@ -2492,27 +2492,28 @@ function _updateEmpAttCard(){
   var card=document.getElementById('emp-att-card');
   if(!card)return;
   var today=new Date().toISOString().slice(0,10);
-  var memberId=currentUser&&(currentUser.memberId||currentUser.id);
+  // Use the actual session member ID (set by attendanceLogin) as primary, fall back to currentUser
+  var memberId=localStorage.getItem('att_member_id')||(currentUser&&(currentUser.memberId||currentUser.id));
   if(!memberId)return;
   var firstLoginKey='att_login_'+memberId+'_'+today;
   var sessKey='att_sess_'+memberId+'_'+today;
   var totalKey='att_total_'+memberId+'_'+today;
-  var firstLogin=localStorage.getItem(firstLoginKey);
-  var activeSess=localStorage.getItem(sessKey);
+  var firstLogin=localStorage.getItem(firstLoginKey)||localStorage.getItem('att_login_time');
+  var activeSess=localStorage.getItem(sessKey)||(_attLoginTime?_attLoginTime.toISOString():null);
   var prevHours=parseFloat(localStorage.getItem(totalKey)||0);
   // Login time display
   var loginEl=document.getElementById('emp-att-login');
   if(loginEl)loginEl.textContent=firstLogin?new Date(firstLogin).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
-  // Hours display
-  var hours=prevHours;
-  if(activeSess)hours+=Math.max(0,(Date.now()-new Date(activeSess))/3600000);
+  // Hours display — if _attLoginTime is active, use it directly for accuracy
+  var hours=_attLoginTime?(_attPrevHours+Math.max(0,(Date.now()-_attLoginTime)/3600000)):prevHours;
+  if(!_attLoginTime&&activeSess&&localStorage.getItem(sessKey))hours+=Math.max(0,(Date.now()-new Date(activeSess))/3600000);
   var h=Math.floor(hours);var m=Math.round((hours%1)*60);
   var hoursEl=document.getElementById('emp-att-hours');
   if(hoursEl)hoursEl.textContent=(h>0?h+'h ':'')+m+'m';
-  // Status
+  // Status — if _attLoginTime is set, always Active
   var statusEl=document.getElementById('emp-att-status');
   if(statusEl){
-    if(activeSess){statusEl.innerHTML='<span style="width:7px;height:7px;border-radius:50%;background:#2ecc8a;animation:pulse-dot 1.4s infinite;display:inline-block"></span> Active';statusEl.style.cssText='display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;background:var(--green-bg);color:var(--green)';}
+    if(_attLoginTime||localStorage.getItem(sessKey)){statusEl.innerHTML='<span style="width:7px;height:7px;border-radius:50%;background:#2ecc8a;animation:pulse-dot 1.4s infinite;display:inline-block"></span> Active';statusEl.style.cssText='display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;background:var(--green-bg);color:var(--green)';}
     else if(firstLogin){statusEl.innerHTML='🔵 Logged Out';statusEl.style.cssText='display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;background:var(--blue-bg);color:var(--blue)';}
     else{statusEl.innerHTML='❌ Not Logged In';statusEl.style.cssText='display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;background:var(--red-bg);color:var(--red)';}
   }
