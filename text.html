@@ -490,7 +490,7 @@ textarea.fctl{resize:vertical;min-height:65px;}
         </div>
         <button class="btn btn-ghost btn-sm" onclick="openTeamCall()" style="color:var(--blue);border-color:rgba(77,166,255,0.3)">📹 Team Call</button>
         <button class="btn btn-primary" id="btn-new-task" onclick="openAddTask()">+ New Task</button>
-        <button class="btn btn-ghost btn-sm" onclick="doLogout()" title="Sign out" style="color:var(--text3)">⎋ Logout</button>
+        <button class="btn btn-ghost btn-sm" onclick="doLogout()" title="Sign out" id="topbar-logout-btn" style="color:var(--text3)">👤 <span id="topbar-uname">User</span> · ⎋ Logout</button>
       </div>
     </div>
 
@@ -3209,6 +3209,9 @@ function applyRoleUI(){
   document.getElementById('sidebar-urole').textContent=admin?'Administrator':reviewer?'Guest — Read Only':'Employee';
   const av=document.getElementById('sidebar-avatar');
   if(av)av.textContent=initials(currentUser.name||currentUser.username);
+  // Topbar logout button — show first name
+  var _tbun=document.getElementById('topbar-uname');
+  if(_tbun){var _fn=(currentUser.name||currentUser.username||'').split(' ')[0];_tbun.textContent=_fn;}
 
   // Reviewer: show all admin nav items (read-only)
   if(reviewer){
