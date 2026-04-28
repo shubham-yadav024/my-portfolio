@@ -2966,7 +2966,7 @@ async function syncFromDB(){
     if(tasksRes?.success){
       const backendTasks=tasksRes.tasks.map(t=>{
         const existing=db.tasks.find(x=>x.id===t.id);
-        return {id:t.id,title:t.title,desc:t.description,ownerId:t.owner_id,status:t.status,priority:t.priority,category:t.category,project:t.project||'',dueDate:t.due_date,dueTime:t.due_time,done:t.done,escalated:t.escalated,isField:t.is_field,fieldJob:t.field_job,escalation:t.escalation||[],createdAt:t.created_at,photos:existing?existing.photos||[]:[]};
+        return {id:t.id,title:t.title,desc:t.description,ownerId:t.owner_id,status:t.status,priority:t.priority,category:t.category,project:t.project||'',dueDate:t.due_date,dueTime:t.due_time,done:t.done,escalated:t.escalated,isField:t.is_field,fieldJob:t.field_job,escalation:t.escalation||[],createdAt:t.created_at,photos:existing?existing.photos||[]:[], comments:existing?existing.comments||[]:[], superiorComments:existing?existing.superiorComments||[]:[], location:existing?existing.location||null:null};
       });
       const backendIds=new Set(backendTasks.map(t=>t.id));
       // Keep local tasks not yet confirmed by backend (optimistic — retry create)
@@ -3519,9 +3519,10 @@ function renderTaskItem(task,compact){
       </div>`:''}
       ${!compact?`<div class="comment-section">
         <div style="font-size:11px;color:var(--text3);margin-bottom:8px;display:flex;align-items:center;gap:6px">💬 Comments <span style="background:var(--bg3);padding:1px 6px;border-radius:10px;font-size:10px">${(task.comments||[]).length}</span></div>
-        ${(task.comments||[]).map(c=>{const cm=getMember(c.memberId);return`<div class="comment-item"><div class="comment-av" style="background:${cm.color||'#555'}">${initials(cm.name||c.author||'?')}</div><div class="comment-body"><div class="comment-author">${c.author||cm.name}</div><div class="comment-text">${c.text}</div><div class="comment-time">${fmtAgo(c.time)}</div></div></div>`;}).join('')}
+        ${(task.comments||[]).length===0?`<div style="font-size:12px;color:var(--text3);font-style:italic;margin-bottom:8px">No comments yet.</div>`:''}
+        ${(task.comments||[]).map(c=>{const cm=getMember(c.memberId);return`<div class="comment-item"><div class="comment-av" style="background:${cm.color||'#555'}">${initials(cm.name||c.author||'?')}</div><div class="comment-body"><div class="comment-author">${c.author||cm.name}</div><div class="comment-text" style="white-space:pre-wrap;word-break:break-word">${c.text}</div><div class="comment-time">${fmtAgo(c.time)}</div></div></div>`;}).join('')}
         <div class="comment-input-row">
-          <textarea class="comment-input" id="ci-${task.id}" placeholder="Add a comment..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addComment('${task.id}')}"></textarea>
+          <textarea class="comment-input" id="ci-${task.id}" placeholder="Add a comment..." rows="2" style="resize:vertical;min-height:38px" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addComment('${task.id}')}"></textarea>
           <button class="btn btn-ghost btn-sm" onclick="addComment('${task.id}')" style="flex-shrink:0;align-self:flex-end">Send</button>
           ${task.isField?`<button class="btn btn-ghost btn-sm" onclick="captureGPS('${task.id}')" style="flex-shrink:0;align-self:flex-end;color:var(--teal);border-color:rgba(38,198,218,0.3)">📍 GPS</button>`:''}
         </div>
@@ -3533,13 +3534,13 @@ function renderTaskItem(task,compact){
           <div class="comment-av" style="background:var(--amber);color:#000">${initials(c.author||'A')}</div>
           <div class="comment-body">
             <div class="comment-author" style="color:var(--amber)">${c.author} <span style="font-size:10px;background:rgba(255,193,7,0.15);padding:1px 5px;border-radius:6px;color:var(--amber)">Superior</span></div>
-            <div class="comment-text">${c.text}</div>
-            <div class="comment-time" style="display:flex;align-items:center;gap:8px">${fmtAgo(c.time)}${isAdmin()?`<span onclick="deleteSuperiorComment('${task.id}',${ci})" style="cursor:pointer;color:var(--red);font-size:10px;opacity:.6" title="Delete">✕</span>`:''}
+            <div class="comment-text" style="white-space:pre-wrap;word-break:break-word">${c.text}</div>
+            <div class="comment-time" style="display:flex;align-items:center;gap:8px">${fmtAgo(c.time)}${isAdmin()?`<span onclick="deleteSuperiorComment('${task.id}',${ci})" style="cursor:pointer;color:var(--red);font-size:10px;opacity:.6" title="Delete">✕ Delete</span>`:''}
             </div>
           </div>
         </div>`).join('')}
         ${isAdmin()?`<div class="comment-input-row" style="margin-top:8px">
-          <textarea class="comment-input" id="sci-${task.id}" placeholder="Add superior note..." rows="1" style="border-color:rgba(255,193,7,0.3)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addSuperiorComment('${task.id}')}"></textarea>
+          <textarea class="comment-input" id="sci-${task.id}" placeholder="Add superior note... (Shift+Enter for new line)" rows="2" style="border-color:rgba(255,193,7,0.3);resize:vertical;min-height:38px" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addSuperiorComment('${task.id}')}"></textarea>
           <button class="btn btn-ghost btn-sm" onclick="addSuperiorComment('${task.id}')" style="flex-shrink:0;align-self:flex-end;color:var(--amber);border-color:rgba(255,193,7,0.3)">Post</button>
         </div>`:`<div style="font-size:11px;color:var(--text3);margin-top:4px">🔒 Only admin can add notes here.</div>`}
       </div>`:''}
