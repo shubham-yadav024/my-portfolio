@@ -983,6 +983,15 @@ textarea.fctl{resize:vertical;min-height:65px;}
             <option>Finance</option><option>HR</option><option>Other</option>
           </select>
         </div>
+        <div class="fg"><label class="flbl">Client</label>
+          <select class="fctl" id="f-client">
+            <option value="">— None —</option>
+            <option value="ADANI">ADANI</option>
+            <option value="BMC">BMC</option>
+            <option value="PWD">PWD</option>
+            <option value="OTHER">OTHER</option>
+          </select>
+        </div>
         <div class="fg"><label class="flbl">Due Date *</label><input class="fctl" type="date" id="f-date"/></div>
         <div class="fg"><label class="flbl">Due Time</label><input class="fctl" type="time" id="f-time"/></div>
         <div class="fg"><label class="flbl">Repeat</label>
@@ -2454,13 +2463,26 @@ async function attendanceLogout(){
   if(document.getElementById('view-attendance')&&document.getElementById('view-attendance').style.display!=='none')loadAttendance();
 }
 
-// ── Auto logout at 6:18 PM ──
+// ── Auto logout at 6:15 PM ──
 function _checkAutoLogout(){
   if(!_attLoginTime)return;
   var now=new Date();
   var h=now.getHours(),m=now.getMinutes();
   if(h>18||(h===18&&m>=15)){
     attendanceLogout();
+    // Clear app session so next day requires fresh login
+    localStorage.removeItem('taskflow_token');
+    localStorage.removeItem('taskflow_user');
+    localStorage.removeItem('tfp2_session');
+    toast('Aaj ka kaam khatam! Kal milte hain 🌙','info');
+    setTimeout(function(){
+      currentUser=null;
+      if(typeof presenceChannel!=='undefined'&&presenceChannel){presenceChannel.untrack();presenceChannel=null;}
+      document.getElementById('login-screen').style.display='flex';
+      document.getElementById('app-layout').style.display='none';
+      var lu=document.getElementById('l-username');if(lu)lu.value='';
+      var lp=document.getElementById('l-password');if(lp)lp.value='';
+    },3000);
   }
 }
 
@@ -2981,7 +3003,7 @@ async function syncFromDB(){
     if(tasksRes?.success){
       const backendTasks=tasksRes.tasks.map(t=>{
         const existing=db.tasks.find(x=>x.id===t.id);
-        return {id:t.id,title:t.title,desc:t.description,ownerId:t.owner_id,status:t.status,priority:t.priority,category:t.category,project:t.project||'',dueDate:t.due_date,dueTime:t.due_time,done:t.done,escalated:t.escalated,isField:t.is_field,fieldJob:t.field_job,escalation:t.escalation||[],createdAt:t.created_at,photos:existing?existing.photos||[]:[], comments:existing?existing.comments||[]:[], superiorComments:existing?existing.superiorComments||[]:[], location:existing?existing.location||null:null};
+        return {id:t.id,title:t.title,desc:t.description,ownerId:t.owner_id,status:t.status,priority:t.priority,category:t.category,client:t.client||existing?.client||'',project:t.project||'',dueDate:t.due_date,dueTime:t.due_time,done:t.done,escalated:t.escalated,isField:t.is_field,fieldJob:t.field_job,escalation:t.escalation||[],createdAt:t.created_at,photos:existing?existing.photos||[]:[], comments:existing?existing.comments||[]:[], superiorComments:existing?existing.superiorComments||[]:[], location:existing?existing.location||null:null};
       });
       const backendIds=new Set(backendTasks.map(t=>t.id));
       // Keep local tasks not yet confirmed by backend (optimistic — retry create)
@@ -3358,7 +3380,7 @@ function openAddTask(forceField){
   editingId=null;document.getElementById('modal-title').textContent='New Task';document.getElementById('edit-id').value='';
   ['f-title','f-desc','f-site','f-address','f-customer','f-cphone','f-cmanager','f-cmanagerphone','f-sitenotes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('f-priority').value='medium';document.getElementById('f-date').value=new Date().toISOString().split('T')[0];
-  document.getElementById('f-time').value='';document.getElementById('f-project').value='';document.getElementById('f-category').value=forceField?'Field Service':'Work';_taskPhotos=[];var pp=document.getElementById('f-photo-preview');if(pp)pp.innerHTML='';
+  document.getElementById('f-time').value='';document.getElementById('f-project').value='';document.getElementById('f-category').value=forceField?'Field Service':'Work';document.getElementById('f-client').value='';_taskPhotos=[];var pp=document.getElementById('f-photo-preview');if(pp)pp.innerHTML='';
   document.getElementById('f-repeat').value='none';document.getElementById('f-visitdate').value='';document.getElementById('f-visittime').value='';
   document.getElementById('f-isfield').checked=!!forceField;document.getElementById('field-fields').style.display=forceField?'block':'none';
   document.querySelectorAll('#ntogs .ntog').forEach(t=>t.classList.toggle('on',t.dataset.n==='browser'));
@@ -3383,7 +3405,7 @@ function openEditTask(id){
   editingId=id;document.getElementById('modal-title').textContent='Edit Task';document.getElementById('edit-id').value=id;
   document.getElementById('f-title').value=t.title;document.getElementById('f-desc').value=t.desc||'';
   document.getElementById('f-priority').value=t.priority;document.getElementById('f-date').value=t.dueDate||'';
-  document.getElementById('f-time').value=t.dueTime||'';document.getElementById('f-project').value=t.project||'';document.getElementById('f-category').value=t.category||'Work';document.getElementById('f-repeat').value=t.repeat||'none';
+  document.getElementById('f-time').value=t.dueTime||'';document.getElementById('f-project').value=t.project||'';document.getElementById('f-category').value=t.category||'Work';document.getElementById('f-client').value=t.client||'';document.getElementById('f-repeat').value=t.repeat||'none';
   const fj=t.fieldJob||{};
   document.getElementById('f-isfield').checked=!!t.isField;document.getElementById('field-fields').style.display=t.isField?'block':'none';
   document.getElementById('f-site').value=fj.site||'';document.getElementById('f-address').value=fj.address||'';
@@ -3432,7 +3454,8 @@ async function saveTask(){
   const project=document.getElementById('f-project').value||'';
   const existingPhotos=editingId?(db.tasks.find(x=>x.id===editingId)||{}).photos||[]:[];
   const photos=[...existingPhotos,..._taskPhotos.filter(function(p){return p!==null;})];
-  const localTask={id:editingId||uid(),title,desc:document.getElementById('f-desc').value.trim(),ownerId,repId,priority:document.getElementById('f-priority').value,dueDate:document.getElementById('f-date').value,dueTime:document.getElementById('f-time').value,category:document.getElementById('f-category').value,project,photos,repeat:document.getElementById('f-repeat').value,notifs,escalation,isField,fieldJob,done:false,escalated:false,createdAt:editingId?(db.tasks.find(x=>x.id===editingId)||{}).createdAt||now():now(),updatedAt:now()};
+  const clientVal=document.getElementById('f-client').value||'';
+  const localTask={id:editingId||uid(),title,desc:document.getElementById('f-desc').value.trim(),ownerId,repId,priority:document.getElementById('f-priority').value,dueDate:document.getElementById('f-date').value,dueTime:document.getElementById('f-time').value,category:document.getElementById('f-category').value,client:clientVal,project,photos,repeat:document.getElementById('f-repeat').value,notifs,escalation,isField,fieldJob,done:false,escalated:false,createdAt:editingId?(db.tasks.find(x=>x.id===editingId)||{}).createdAt||now():now(),updatedAt:now()};
   if(editingId){
     const idx=db.tasks.findIndex(x=>x.id===editingId);localTask.done=db.tasks[idx]?.done||false;localTask.escalated=db.tasks[idx]?.escalated||false;
     db.tasks[idx]=localTask;log('Task "'+title+'" updated');
@@ -3495,6 +3518,7 @@ function renderTaskItem(task,compact){
         ${getStatusBadge(task)}
         <span class="badge badge-${task.priority}">${pLabels[task.priority]}</span>
         ${task.isField?'<span class="badge badge-field">📍 Field</span>':''}
+        ${task.client?`<span class="badge" style="background:rgba(6,182,212,0.15);color:var(--teal);font-weight:700;letter-spacing:.04em">${task.client}</span>`:''}
         ${task.project?`<span class="badge" style="background:rgba(99,102,241,0.15);color:#a5b4fc;font-weight:700">${task.project}</span>`:''}
         ${task.category?`<span class="badge" style="background:var(--bg3);color:var(--text3)">${task.category}</span>`:''}
       </div>
