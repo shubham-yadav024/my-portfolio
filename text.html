@@ -3188,6 +3188,8 @@ function launchApp(){
     var ae=document.activeElement;
     var commentFocused=ae&&ae.classList&&ae.classList.contains('comment-input');
     var anyCommentHasText=Array.from(document.querySelectorAll('.comment-input')).some(function(el){return el.value.trim().length>0;});
+    if(!commentFocused)commentFocused=ae&&ae.id&&(ae.id.startsWith('sci-'));
+    if(!anyCommentHasText)anyCommentHasText=Array.from(document.querySelectorAll('[id^="sci-"]')).some(function(el){return el.value&&el.value.trim().length>0;});
     if(!commentFocused&&!anyCommentHasText){if(typeof renderTaskList==='function')renderTaskList();}
     if(typeof renderDashboard==='function')renderDashboard();
   },1000); // UI re-render every 1s
@@ -3523,6 +3525,23 @@ function renderTaskItem(task,compact){
           <button class="btn btn-ghost btn-sm" onclick="addComment('${task.id}')" style="flex-shrink:0;align-self:flex-end">Send</button>
           ${task.isField?`<button class="btn btn-ghost btn-sm" onclick="captureGPS('${task.id}')" style="flex-shrink:0;align-self:flex-end;color:var(--teal);border-color:rgba(38,198,218,0.3)">📍 GPS</button>`:''}
         </div>
+      </div>
+      <div class="comment-section" style="margin-top:10px;border:1px solid rgba(255,193,7,0.25);background:rgba(255,193,7,0.04);border-radius:10px;padding:12px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);margin-bottom:8px;display:flex;align-items:center;gap:6px">👑 Superior's Note <span style="background:rgba(255,193,7,0.15);padding:1px 6px;border-radius:10px;font-size:10px;color:var(--amber)">${(task.superiorComments||[]).length}</span></div>
+        ${(task.superiorComments||[]).length===0?`<div style="font-size:12px;color:var(--text3);font-style:italic;margin-bottom:8px">No notes from superior yet.</div>`:''}
+        ${(task.superiorComments||[]).map((c,ci)=>`<div class="comment-item" style="border-left:2px solid var(--amber);padding-left:8px;margin-bottom:6px">
+          <div class="comment-av" style="background:var(--amber);color:#000">${initials(c.author||'A')}</div>
+          <div class="comment-body">
+            <div class="comment-author" style="color:var(--amber)">${c.author} <span style="font-size:10px;background:rgba(255,193,7,0.15);padding:1px 5px;border-radius:6px;color:var(--amber)">Superior</span></div>
+            <div class="comment-text">${c.text}</div>
+            <div class="comment-time" style="display:flex;align-items:center;gap:8px">${fmtAgo(c.time)}${isAdmin()?`<span onclick="deleteSuperiorComment('${task.id}',${ci})" style="cursor:pointer;color:var(--red);font-size:10px;opacity:.6" title="Delete">✕</span>`:''}
+            </div>
+          </div>
+        </div>`).join('')}
+        ${isAdmin()?`<div class="comment-input-row" style="margin-top:8px">
+          <textarea class="comment-input" id="sci-${task.id}" placeholder="Add superior note..." rows="1" style="border-color:rgba(255,193,7,0.3)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addSuperiorComment('${task.id}')}"></textarea>
+          <button class="btn btn-ghost btn-sm" onclick="addSuperiorComment('${task.id}')" style="flex-shrink:0;align-self:flex-end;color:var(--amber);border-color:rgba(255,193,7,0.3)">Post</button>
+        </div>`:`<div style="font-size:11px;color:var(--text3);margin-top:4px">🔒 Only admin can add notes here.</div>`}
       </div>`:''}
     </div>
     ${!compact?(canEdit(task)?`<div class="tacts"><button class="ibtn" onclick="openEditTask('${task.id}')" title="Edit">✏️</button>${(isAdmin()||(task.ownerId===currentUser?.memberId||task.ownerId===currentUser?.id))?`<button class="ibtn del" onclick="deleteTask('${task.id}')" title="Delete">🗑</button>`:''}</div>`:`<div class="tacts"><span class="locked-tip">👁 View only</span></div>`):''}
@@ -4624,6 +4643,26 @@ function addComment(taskId){
   renderTaskList();renderFieldJobs();renderDashboard();
   toast('Comment added!','success');
   try{TasksAPI.update(taskId,{comments:task.comments});}catch(e){}
+}
+function addSuperiorComment(taskId){
+  if(!isAdmin()){toast('Only admin can add superior notes.','error');return;}
+  const input=document.getElementById('sci-'+taskId);if(!input)return;
+  const text=input.value.trim();if(!text){toast('Type a note first.','warning');return;}
+  const task=db.tasks.find(t=>t.id===taskId);if(!task){toast('Task not found, please refresh.','error');return;}
+  if(!task.superiorComments)task.superiorComments=[];
+  task.superiorComments.push({id:uid(),text,author:currentUser.name||currentUser.username,time:now()});
+  task.updatedAt=now();saveDB();input.value='';
+  renderTaskList();renderFieldJobs();
+  toast('Superior note posted!','success');
+  try{TasksAPI.update(taskId,{superiorComments:task.superiorComments});}catch(e){}
+}
+function deleteSuperiorComment(taskId,idx){
+  if(!isAdmin()){toast('Only admin can delete superior notes.','error');return;}
+  const task=db.tasks.find(t=>t.id===taskId);if(!task||!task.superiorComments)return;
+  task.superiorComments.splice(idx,1);
+  task.updatedAt=now();saveDB();
+  renderTaskList();renderFieldJobs();
+  try{TasksAPI.update(taskId,{superiorComments:task.superiorComments});}catch(e){}
 }
 function captureGPS(taskId){
   if(!navigator.geolocation){toast('GPS is not supported on this device','error');return;}
