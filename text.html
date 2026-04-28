@@ -4004,6 +4004,7 @@ function openMemberDetail(id){
           +'<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">'+(t.title||'Untitled')+'</div>'
           +'<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">'
             +'<span style="font-size:11px;color:var(--text3)">📅 '+due+'</span>'
+            +(t.client?'<span style="font-size:11px;background:rgba(6,182,212,0.15);color:var(--teal);font-weight:700;padding:1px 8px;border-radius:4px">'+t.client+'</span>':'')
             +(t.project?'<span style="font-size:11px;background:rgba(99,102,241,.15);color:#a5b4fc;padding:1px 8px;border-radius:4px">'+t.project+'</span>':'')
             +(t.isField?'<span style="font-size:11px;color:var(--teal)">📍 Field</span>':'')
           +'</div>'
@@ -4017,6 +4018,7 @@ function openMemberDetail(id){
         // Badges row
         +'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">'
           +'<span style="font-size:11px;background:var(--bg3);color:var(--text2);padding:4px 12px;border-radius:6px;font-weight:600">📌 '+pLabel+'</span>'
+          +(t.client?'<span style="font-size:11px;background:rgba(6,182,212,0.15);color:var(--teal);padding:4px 12px;border-radius:6px;font-weight:700">🏢 '+t.client+'</span>':'')
           +(t.category?'<span style="font-size:11px;background:var(--bg3);color:var(--text2);padding:4px 12px;border-radius:6px">'+t.category+'</span>':'')
           +'<span style="font-size:11px;background:var(--bg3);color:var(--text3);padding:4px 12px;border-radius:6px">🕐 Created: '+createdStr+'</span>'
           +(t.dueTime?'<span style="font-size:11px;background:var(--bg3);color:var(--text3);padding:4px 12px;border-radius:6px">⏰ '+t.dueTime+'</span>':'')
