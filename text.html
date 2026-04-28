@@ -2345,8 +2345,10 @@ async function attendanceLogin(memberId){
   _startAttTimer();_updateSessionCard();
   if(document.getElementById('view-attendance')&&document.getElementById('view-attendance').style.display!=='none')setTimeout(loadAttendance,100);
 
-  // Background: sync to Supabase (insert first session, update login_time on new session)
-  _attSyncToSupa(id,today,localStorage.getItem(firstLoginKey),now,canonicalName);
+  // Background: sync to Supabase; after sync completes, reload attendance panel so Active status shows correctly
+  _attSyncToSupa(id,today,localStorage.getItem(firstLoginKey),now,canonicalName).then(function(){
+    if(document.getElementById('view-attendance')&&document.getElementById('view-attendance').style.display!=='none')loadAttendance();
+  }).catch(function(){});
 
   // Background: sync to backend
   AttendanceAPI.markLogin(id).then(function(res){
@@ -2741,13 +2743,19 @@ async function loadAttendance(){
     if(supaData&&supaData.length>0){
       var merged=db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer'&&!['ashish yadav','pravin bidaye'].some(function(n){return(m.name||'').toLowerCase().includes(n);});}).map(function(m){
         var rec=supaData.find(function(r){return r.member_id===m.id||_attNameMatch(r.member_name,m.name);});
-        if(!rec)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:0};
-        var hours=rec.total_hours||0;
-        var activeSess=rec.session_start||(!rec.logout_time&&rec.login_time?rec.login_time:null);
-        if(!rec.logout_time&&activeSess){
-          hours=(rec.total_hours||0)+Math.max(0,(Date.now()-new Date(activeSess))/3600000);
+        // Check localStorage: if local session active, user IS active regardless of Supabase state (handles re-login before Supabase sync)
+        var localSessKey='att_sess_'+m.id+'_'+today;
+        var localSess=localStorage.getItem(localSessKey);
+        if(!rec&&!localSess)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:0};
+        var hours=rec?parseFloat(rec.total_hours||0):0;
+        var effectiveLogout=localSess?null:(rec?rec.logout_time:null); // local active overrides Supabase logout_time
+        var activeSess=localSess||rec&&(rec.session_start||(!rec.logout_time&&rec.login_time?rec.login_time:null));
+        if(!effectiveLogout&&activeSess){
+          hours=(rec?parseFloat(rec.total_hours||0):0)+Math.max(0,(Date.now()-new Date(activeSess))/3600000);
         }
-        return{member:m,today_status:'present',login_time:rec.login_time,logout_time:rec.logout_time,today_hours:parseFloat(hours).toFixed(1)};
+        var firstLoginKey='att_login_'+(rec?rec.member_id:m.id)+'_'+today;
+        var localFirstLogin=localStorage.getItem(firstLoginKey);
+        return{member:m,today_status:'present',login_time:(rec&&rec.login_time)||localFirstLogin,logout_time:effectiveLogout,today_hours:parseFloat(hours).toFixed(1)};
       });
       _renderSummary(merged);
     }
