@@ -2508,13 +2508,16 @@ function _updateActiveHoursDisplay(){
   var sb=document.getElementById('my-hours-badge');
   if(sb){sb.textContent=str;sb.style.display='inline';}
   // Update live hours for ALL active users in the attendance panel
-  document.querySelectorAll('.live-att-hours[data-login]').forEach(function(span){
-    var loginStr=span.getAttribute('data-login');
-    if(!loginStr)return;
-    var ms=Date.now()-new Date(loginStr).getTime();
+  // Uses prevHours (accumulated from completed sessions) + current session duration
+  document.querySelectorAll('.live-att-hours[data-sess-start]').forEach(function(span){
+    var sessStart=span.getAttribute('data-sess-start');
+    if(!sessStart)return;
+    var prevH=parseFloat(span.getAttribute('data-prev-hours')||0);
+    var ms=Date.now()-new Date(sessStart).getTime();
     if(ms<0)return;
-    var h=Math.floor(ms/3600000);
-    var m=Math.floor((ms%3600000)/60000);
+    var totalH=prevH+(ms/3600000);
+    var h=Math.floor(totalH);
+    var m=Math.floor((totalH%1)*60);
     span.textContent=(h>0?h+'h ':'')+m+'m';
   });
   // Update employee dashboard attendance card
@@ -2569,7 +2572,12 @@ function _updateSessionCard(){
   var avEl=document.getElementById('my-sess-av');
   var nameEl=document.getElementById('my-sess-name');
   var loginEl=document.getElementById('my-sess-login');
-  var loginStr=_attLoginTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+  // Always show FIRST login of the day, not current session start
+  var _scToday=new Date().toISOString().slice(0,10);
+  var _scUid=currentUser&&currentUser.id;
+  var _scMid=localStorage.getItem('att_member_id')||(currentUser&&(currentUser.memberId||currentUser.id));
+  var _scFirstLogin=localStorage.getItem('att_s_'+_scUid+'_first_'+_scToday)||localStorage.getItem('att_login_'+_scMid+'_'+_scToday);
+  var loginStr=_scFirstLogin?new Date(_scFirstLogin).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):_attLoginTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
   if(avEl)avEl.textContent=initials(currentUser.name||currentUser.username||'?');
   if(nameEl)nameEl.textContent=currentUser.name||currentUser.username||'—';
   if(loginEl)loginEl.textContent=loginStr;
@@ -2719,7 +2727,7 @@ async function loadAttendance(){
       var prevHours=parseFloat(localStorage.getItem(totalKey)||0);
       var hours=prevHours;
       if(activeSess) hours+=Math.max(0,(Date.now()-new Date(activeSess))/3600000);
-      return{member:m,today_status:isPresent?'present':'absent',login_time:firstLogin||null,logout_time:null,today_hours:hours.toFixed(1),isActive:!!activeSess};
+      return{member:m,today_status:isPresent?'present':'absent',login_time:firstLogin||null,logout_time:null,today_hours:hours.toFixed(1),isActive:!!activeSess,prevHours:prevHours,sessStart:activeSess||''};
     });
   }
 
@@ -2738,8 +2746,8 @@ async function loadAttendance(){
       const m=s.member;
       const isPresent=s.today_status==='present';
       const isMe=m.id===myId;
-      const isActive=isPresent&&!s.logout_time;
-      const isLoggedOut=isPresent&&!!s.logout_time;
+      const isActive=s.isActive!==undefined?s.isActive:(isPresent&&!s.logout_time);
+      const isLoggedOut=isPresent&&!isActive;
       const loginTime=s.login_time?new Date(s.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
       const logoutTime=s.logout_time?new Date(s.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):(isActive?'<span style="color:var(--green);font-weight:600">Active</span>':'—');
       const hours=parseFloat(s.today_hours||0).toFixed(1);
@@ -2757,7 +2765,7 @@ async function loadAttendance(){
         </div>
         <div style="text-align:center;min-width:70px"><div style="font-size:11px;color:var(--text3)">Login</div><div class="att-login" style="font-size:13px;font-weight:500">${loginTime}</div></div>
         <div style="text-align:center;min-width:70px"><div style="font-size:11px;color:var(--text3)">Logout</div><div class="att-logout" style="font-size:13px;font-weight:500">${logoutTime}</div></div>
-        <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--text3)">Hours</div><div class="att-hours" style="font-size:14px;font-weight:700;color:${hoursColor}">${isActive?`<span class="live-att-hours" data-id="${m.id}" data-login="${s.login_time||''}">${hours}h</span>`:hours+'h'}</div></div>
+        <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--text3)">Hours</div><div class="att-hours" style="font-size:14px;font-weight:700;color:${hoursColor}">${isActive?`<span class="live-att-hours" data-id="${m.id}" data-sess-start="${s.sessStart||''}" data-prev-hours="${s.prevHours||0}">${hours}h</span>`:hours+'h'}</div></div>
         <span class="att-badge" style="display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;${badgeStyle}">
           ${badgeContent}
         </span>
@@ -2793,7 +2801,8 @@ async function loadAttendance(){
         }
         var firstLoginKey='att_login_'+(rec?rec.member_id:m.id)+'_'+today;
         var localFirstLogin=localStorage.getItem(firstLoginKey);
-        return{member:m,today_status:'present',login_time:(rec&&rec.login_time)||localFirstLogin,logout_time:effectiveLogout,today_hours:parseFloat(hours).toFixed(1)};
+        var supaBase=rec?parseFloat(rec.total_hours||0):0;
+        return{member:m,today_status:'present',login_time:(rec&&rec.login_time)||localFirstLogin,logout_time:effectiveLogout,today_hours:parseFloat(hours).toFixed(1),isActive:!effectiveLogout&&!!activeSess,prevHours:supaBase,sessStart:(!effectiveLogout&&activeSess)||''};
       });
       _renderSummary(merged);
     }
