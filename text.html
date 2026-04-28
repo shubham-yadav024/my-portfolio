@@ -3199,13 +3199,7 @@ function launchApp(){
   syncFromDB();
   setInterval(syncFromDB,5000); // backend fetch every 5s
   setInterval(function(){
-    // Skip task list re-render if user is typing in a comment input (prevents textarea content being wiped)
-    var ae=document.activeElement;
-    var commentFocused=ae&&ae.classList&&ae.classList.contains('comment-input');
-    var anyCommentHasText=Array.from(document.querySelectorAll('.comment-input')).some(function(el){return el.value.trim().length>0;});
-    if(!commentFocused)commentFocused=ae&&ae.id&&(ae.id.startsWith('sci-'));
-    if(!anyCommentHasText)anyCommentHasText=Array.from(document.querySelectorAll('[id^="sci-"]')).some(function(el){return el.value&&el.value.trim().length>0;});
-    if(!commentFocused&&!anyCommentHasText){if(typeof renderTaskList==='function')renderTaskList();}
+    // Only re-render dashboard (hours badge, stats) — task list re-render only on explicit actions or syncFromDB
     if(typeof renderDashboard==='function')renderDashboard();
   },1000); // UI re-render every 1s
   initPresence();
@@ -4005,6 +3999,26 @@ function openMemberDetail(id){
         +'</div>'
         +fieldHtml
         +photosHtml
+        // Comments section
+        +'<div style="margin-top:14px;border-top:1px solid var(--border2);padding-top:12px">'
+          +'<div style="font-size:11px;color:var(--text3);margin-bottom:8px;display:flex;align-items:center;gap:6px">💬 Comments <span style="background:var(--bg3);padding:1px 6px;border-radius:10px;font-size:10px">'+((t.comments||[]).length)+'</span></div>'
+          +((t.comments||[]).length===0?'<div style="font-size:12px;color:var(--text3);font-style:italic;margin-bottom:8px">No comments yet.</div>':'')
+          +(t.comments||[]).map(function(c){var cm=getMember(c.memberId);return'<div style="display:flex;gap:8px;margin-bottom:8px"><div style="width:28px;height:28px;border-radius:50%;background:'+(cm.color||'#555')+';display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">'+initials(cm.name||c.author||'?')+'</div><div style="flex:1"><div style="font-size:12px;font-weight:600;color:var(--text)">'+c.author+'</div><div style="font-size:13px;color:var(--text2);white-space:pre-wrap;word-break:break-word;margin:2px 0">'+c.text+'</div><div style="font-size:10px;color:var(--text3)">'+fmtAgo(c.time)+'</div></div></div>';}).join('')
+          +'<div style="display:flex;gap:8px;margin-top:6px">'
+            +'<textarea id="mdm-ci-'+t.id+'" class="mdm-comment-input" placeholder="Add a comment..." rows="2" style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;resize:vertical;min-height:38px;font-family:inherit" oninput="this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'"></textarea>'
+            +'<button onclick="event.stopPropagation();addMdmComment(\''+t.id+'\')" style="align-self:flex-end;padding:8px 14px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;cursor:pointer;font-weight:600">Send</button>'
+          +'</div>'
+        +'</div>'
+        // Superior's Note
+        +'<div style="margin-top:10px;border:1px solid rgba(255,193,7,0.25);background:rgba(255,193,7,0.04);border-radius:10px;padding:12px">'
+          +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);margin-bottom:8px;display:flex;align-items:center;gap:6px">👑 Superior\'s Note <span style="background:rgba(255,193,7,0.15);padding:1px 6px;border-radius:10px;font-size:10px;color:var(--amber)">'+((t.superiorComments||[]).length)+'</span></div>'
+          +((t.superiorComments||[]).length===0?'<div style="font-size:12px;color:var(--text3);font-style:italic;margin-bottom:8px">No notes from superior yet.</div>':'')
+          +(t.superiorComments||[]).map(function(c,ci){return'<div style="display:flex;gap:8px;margin-bottom:8px;border-left:2px solid var(--amber);padding-left:8px"><div style="width:28px;height:28px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#000;flex-shrink:0">'+initials(c.author||'A')+'</div><div style="flex:1"><div style="font-size:12px;font-weight:600;color:var(--amber)">'+c.author+' <span style="font-size:10px;background:rgba(255,193,7,0.15);padding:1px 5px;border-radius:6px">Superior</span></div><div style="font-size:13px;color:var(--text2);white-space:pre-wrap;word-break:break-word;margin:2px 0">'+c.text+'</div><div style="font-size:10px;color:var(--text3);display:flex;align-items:center;gap:8px">'+fmtAgo(c.time)+(isAdmin()?'<span onclick="event.stopPropagation();deleteSuperiorComment(\''+t.id+'\','+ci+');setTimeout(function(){openMemberDetail(\''+id+'\');},100)" style="cursor:pointer;color:var(--red);opacity:.7">✕ Delete</span>':'')+'</div></div></div>';}).join('')
+          +(isAdmin()?'<div style="display:flex;gap:8px;margin-top:6px">'
+            +'<textarea id="mdm-sci-'+t.id+'" class="mdm-comment-input" placeholder="Add superior note..." rows="2" style="flex:1;background:var(--bg3);border:1px solid rgba(255,193,7,0.3);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;resize:vertical;min-height:38px;font-family:inherit" oninput="this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'"></textarea>'
+            +'<button onclick="event.stopPropagation();addMdmSuperiorComment(\''+t.id+'\',\''+id+'\')" style="align-self:flex-end;padding:8px 14px;background:var(--amber);border:none;border-radius:8px;color:#000;font-size:13px;cursor:pointer;font-weight:700">Post</button>'
+          +'</div>':'<div style="font-size:11px;color:var(--text3);margin-top:4px">🔒 Only admin can add notes here.</div>')
+        +'</div>'
         // Action buttons — visible to all
         +'<div style="display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border2)">'
           +(isAdmin()?'<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();closeModal(\'member-detail-modal\');openEditTask(\''+t.id+'\')">✏️ Edit Task</button>':'')
@@ -4679,6 +4693,35 @@ function deleteSuperiorComment(taskId,idx){
   task.updatedAt=now();saveDB();
   renderTaskList();renderFieldJobs();
   try{TasksAPI.update(taskId,{superiorComments:task.superiorComments});}catch(e){}
+}
+// Member detail modal comment functions
+function addMdmComment(taskId){
+  const input=document.getElementById('mdm-ci-'+taskId);if(!input)return;
+  const text=input.value.trim();if(!text){toast('Type a comment first.','warning');return;}
+  const task=db.tasks.find(t=>t.id===taskId);if(!task){toast('Task not found.','error');return;}
+  if(!task.comments)task.comments=[];
+  task.comments.push({id:uid(),text,author:currentUser?currentUser.name||currentUser.username:'Unknown',memberId:currentUser?currentUser.memberId||currentUser.id:'',time:now()});
+  task.updatedAt=now();saveDB();input.value='';
+  renderTaskList();renderFieldJobs();
+  toast('Comment added!','success');
+  try{TasksAPI.update(taskId,{comments:task.comments});}catch(e){}
+  // Refresh member detail to show new comment
+  var mdmBody=document.getElementById('mdm-ci-'+taskId);
+  if(mdmBody){var det=mdmBody.closest('[id^="mdm-det-"]');if(det){var memberId=det.getAttribute('data-memberid')||'';}}
+}
+function addMdmSuperiorComment(taskId,memberId){
+  if(!isAdmin()){toast('Only admin can add superior notes.','error');return;}
+  const input=document.getElementById('mdm-sci-'+taskId);if(!input)return;
+  const text=input.value.trim();if(!text){toast('Type a note first.','warning');return;}
+  const task=db.tasks.find(t=>t.id===taskId);if(!task){toast('Task not found.','error');return;}
+  if(!task.superiorComments)task.superiorComments=[];
+  task.superiorComments.push({id:uid(),text,author:currentUser.name||currentUser.username,time:now()});
+  task.updatedAt=now();saveDB();input.value='';
+  renderTaskList();renderFieldJobs();
+  toast('Superior note posted!','success');
+  try{TasksAPI.update(taskId,{superiorComments:task.superiorComments});}catch(e){}
+  // Refresh modal to show updated notes
+  if(memberId)setTimeout(function(){openMemberDetail(memberId);},100);
 }
 function captureGPS(taskId){
   if(!navigator.geolocation){toast('GPS is not supported on this device','error');return;}
