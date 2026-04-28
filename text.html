@@ -3183,7 +3183,14 @@ function launchApp(){
   renderDashboard();updateBadges();scheduleAll();
   syncFromDB();
   setInterval(syncFromDB,5000); // backend fetch every 5s
-  setInterval(function(){if(typeof renderTaskList==='function')renderTaskList();if(typeof renderDashboard==='function')renderDashboard();},1000); // UI re-render every 1s
+  setInterval(function(){
+    // Skip task list re-render if user is typing in a comment input (prevents textarea content being wiped)
+    var ae=document.activeElement;
+    var commentFocused=ae&&ae.classList&&ae.classList.contains('comment-input');
+    var anyCommentHasText=Array.from(document.querySelectorAll('.comment-input')).some(function(el){return el.value.trim().length>0;});
+    if(!commentFocused&&!anyCommentHasText){if(typeof renderTaskList==='function')renderTaskList();}
+    if(typeof renderDashboard==='function')renderDashboard();
+  },1000); // UI re-render every 1s
   initPresence();
 }
 
@@ -4609,8 +4616,8 @@ document.querySelectorAll('#ntogs .ntog').forEach(el=>el.addEventListener('click
 
 function addComment(taskId){
   const input=document.getElementById('ci-'+taskId);if(!input)return;
-  const text=input.value.trim();if(!text){toast('Please enter a comment before submitting.','warning');return;}
-  const task=db.tasks.find(t=>t.id===taskId);if(!task)return;
+  const text=input.value.trim();if(!text){toast('Type a comment first.','warning');return;}
+  const task=db.tasks.find(t=>t.id===taskId);if(!task){toast('Task not found, please refresh.','error');return;}
   if(!task.comments)task.comments=[];
   task.comments.push({id:uid(),text,author:currentUser?currentUser.name||currentUser.username:'Unknown',memberId:currentUser?currentUser.memberId||currentUser.id:'',time:now()});
   task.updatedAt=now();saveDB();input.value='';
