@@ -2326,7 +2326,9 @@ async function attendanceLogin(memberId){
   var activeSess=localStorage.getItem(sessKey);
   if(activeSess){
     _attLoginTime=new Date(activeSess);
-    _attPrevHours=parseFloat(localStorage.getItem(totalKey)||0);
+    var _ruid=currentUser&&currentUser.id||id;
+    var _stablePrevR=parseFloat(localStorage.getItem('att_s_'+_ruid+'_total_'+today)||0);
+    _attPrevHours=Math.max(parseFloat(localStorage.getItem(totalKey)||0),_stablePrevR);
     localStorage.setItem('att_member_id',id);
     localStorage.setItem('att_login_time',activeSess);
     _startAttTimer();_updateSessionCard();
@@ -2340,7 +2342,13 @@ async function attendanceLogin(memberId){
   localStorage.setItem(sessKey,now);
   localStorage.setItem('att_member_id',id);
   localStorage.setItem('att_login_time',now);
-  _attPrevHours=parseFloat(localStorage.getItem(totalKey)||0);
+  // Stable keys based on currentUser.id (survives member-id mismatch & logout)
+  var _uid=currentUser&&currentUser.id||id;
+  var _sFirst='att_s_'+_uid+'_first_'+today;
+  var _sTotal='att_s_'+_uid+'_total_'+today;
+  if(!localStorage.getItem(_sFirst))localStorage.setItem(_sFirst,localStorage.getItem(firstLoginKey)||now);
+  var _stablePrev=parseFloat(localStorage.getItem(_sTotal)||0);
+  _attPrevHours=Math.max(parseFloat(localStorage.getItem(totalKey)||0),_stablePrev);
   _attLoginTime=new Date(now);
   _startAttTimer();_updateSessionCard();
   if(document.getElementById('view-attendance')&&document.getElementById('view-attendance').style.display!=='none')setTimeout(loadAttendance,100);
@@ -2410,6 +2418,9 @@ async function attendanceLogout(){
   var prevHours=parseFloat(localStorage.getItem(totalKey)||0);
   var newTotal=prevHours+sessHours;
   localStorage.setItem(totalKey,newTotal.toFixed(4)); // persist accumulated total
+  // Also save to stable key (survives member-id changes)
+  var _uid2=currentUser&&currentUser.id||memberId;
+  localStorage.setItem('att_s_'+_uid2+'_total_'+today,newTotal.toFixed(4));
 
   // Read IDs before clearing
   var supaId=localStorage.getItem('att_supa_id');
@@ -2498,13 +2509,17 @@ function _updateEmpAttCard(){
   var firstLoginKey='att_login_'+memberId+'_'+today;
   var sessKey='att_sess_'+memberId+'_'+today;
   var totalKey='att_total_'+memberId+'_'+today;
-  var firstLogin=localStorage.getItem(firstLoginKey)||localStorage.getItem('att_login_time');
+  // Stable keys (based on currentUser.id — survives member-id mismatch)
+  var _suid=currentUser&&currentUser.id||memberId;
+  var _sFirst=localStorage.getItem('att_s_'+_suid+'_first_'+today);
+  var _sTotal=parseFloat(localStorage.getItem('att_s_'+_suid+'_total_'+today)||0);
+  var firstLogin=localStorage.getItem(firstLoginKey)||_sFirst; // NO fallback to att_login_time (that's current-session start, not first login)
   var activeSess=localStorage.getItem(sessKey)||(_attLoginTime?_attLoginTime.toISOString():null);
-  var prevHours=parseFloat(localStorage.getItem(totalKey)||0);
-  // Login time display
+  var prevHours=Math.max(parseFloat(localStorage.getItem(totalKey)||0),_sTotal);
+  // Login time display — first login time of day
   var loginEl=document.getElementById('emp-att-login');
   if(loginEl)loginEl.textContent=firstLogin?new Date(firstLogin).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
-  // Hours display — if _attLoginTime is active, use it directly for accuracy
+  // Hours: use _attPrevHours + current session (most accurate when active)
   var hours=_attLoginTime?(_attPrevHours+Math.max(0,(Date.now()-_attLoginTime)/3600000)):prevHours;
   if(!_attLoginTime&&activeSess&&localStorage.getItem(sessKey))hours+=Math.max(0,(Date.now()-new Date(activeSess))/3600000);
   var h=Math.floor(hours);var m=Math.round((hours%1)*60);
