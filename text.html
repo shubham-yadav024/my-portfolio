@@ -2431,6 +2431,8 @@ window._getAttSupa=async function _getAttSupa(){
 }
 
 async function attendanceLogin(memberId){
+  // Sunday = holiday, no attendance
+  if(new Date().getDay()===0)return;
   // Resolve best matching member from db.members
   var canonicalName='';
   var id=memberId||(currentUser&&currentUser.memberId);
@@ -2595,6 +2597,7 @@ async function attendanceLogout(){
 // ── Auto logout at 6:15 PM ──
 function _checkAutoLogout(){
   if(!_attLoginTime)return;
+  if(new Date().getDay()===0)return; // Sunday = holiday
   var now=new Date();
   var h=now.getHours(),m=now.getMinutes();
   if(h>18||(h===18&&m>=15)){
