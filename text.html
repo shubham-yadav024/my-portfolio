@@ -3319,7 +3319,7 @@ async function syncFromDB(){
     if(typeof renderAll==='function')renderAll();
   }catch(err){}
 }
-document.addEventListener('DOMContentLoaded',()=>{if(AuthAPI.isLoggedIn()){syncFromDB();setInterval(syncFromDB,5000);setInterval(function(){var fa=document.activeElement;var commentFocused=fa&&fa.id&&/^(ci-|sci-|mdm-ci-|mdm-sci-)/.test(fa.id);if(!commentFocused&&typeof renderTaskList==='function')renderTaskList();if(typeof renderDashboard==='function')renderDashboard();var accV=document.getElementById('view-account');if(accV&&accV.style.display!=='none'&&typeof renderAccountList==='function')renderAccountList();},1000);setInterval(function(){var accV=document.getElementById('view-account');if(accV&&accV.style.display!=='none')syncAccountFromSupabase();},5000);setInterval(_checkStorageUsage,60000);setTimeout(_checkStorageUsage,5000);}});
+document.addEventListener('DOMContentLoaded',()=>{if(AuthAPI.isLoggedIn()){syncFromDB();setInterval(syncFromDB,5000);setInterval(function(){var fa=document.activeElement;var commentFocused=fa&&fa.id&&/^(ci-|sci-|mdm-ci-|mdm-sci-)/.test(fa.id);if(!commentFocused&&typeof renderTaskList==='function')renderTaskList();if(typeof renderDashboard==='function')renderDashboard();var accV=document.getElementById('view-account');if(accV&&accV.style.display!=='none'&&typeof renderAccountList==='function')renderAccountList();},1000);setInterval(function(){if(typeof updateAllPresenceDots==='function')updateAllPresenceDots();},5000);setInterval(function(){var accV=document.getElementById('view-account');if(accV&&accV.style.display!=='none')syncAccountFromSupabase();},5000);setInterval(_checkStorageUsage,60000);setTimeout(_checkStorageUsage,5000);}});
 
 // ═══ PRESENCE ═══
 let presenceChannel=null;let onlineUserIds=new Set();
@@ -3334,7 +3334,16 @@ async function initPresence(){
     presenceChannel.on('presence',{event:'sync'},()=>{
       const state=presenceChannel.presenceState();
       onlineUserIds=new Set();
-      Object.values(state).flat().forEach(u=>{if(u.memberId)onlineUserIds.add(u.memberId);onlineUserIds.add(u.userId);});
+      Object.values(state).flat().forEach(function(u){
+        if(u.memberId)onlineUserIds.add(u.memberId);
+        if(u.userId)onlineUserIds.add(u.userId);
+        // Name-based fallback: match by name (fuzzy) so users without memberId still show online
+        if(u.name){
+          var matched=db.members.find(function(x){return _attNameMatch(x.name,u.name);});
+          if(!matched)matched=db.members.find(function(x){return x.name&&_normAttName(x.name)===_normAttName(u.name);});
+          if(matched)onlineUserIds.add(matched.id);
+        }
+      });
       updateAllPresenceDots();
     }).subscribe(async(status)=>{
       if(status==='SUBSCRIBED'){await presenceChannel.track({userId:currentUser.id,memberId:currentUser.memberId||null,name:currentUser.name||currentUser.username});}
