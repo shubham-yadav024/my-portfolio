@@ -3272,8 +3272,8 @@ async function loadAttendance(){
 
       // Render rows
       histList.innerHTML=rows.map(function(r){
-        const member=db.members.find(function(m){var mn=_normAttName(r.member_name);var mname=_normAttName(m.name);return m.id===r.member_id||mn===mname||(mn&&mname&&(mn.includes(mname)||mname.includes(mn)));});
-        if(!member||member.role==='admin'||member.role==='reviewer')return''; // skip admins
+        const member=db.members.find(function(m){return m.id===r.member_id||_attNameMatch(m.name,r.member_name);});
+        if(!member||member.role==='admin'||member.role==='reviewer'||_isMemberAdmin(member))return''; // skip admins
         const loginT=r.login_time?new Date(r.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
         const logoutT=r.logout_time?new Date(r.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'<span style="color:var(--green);font-weight:600">Active</span>';
         const hrs=parseFloat(r.total_hours||0);
@@ -3459,6 +3459,13 @@ async function syncFromDB(){
     const membersRes=await MembersAPI.getAll();
     if(membersRes?.success){
       db.members=membersRes.members.map(m=>({id:m.id,name:m.name,role:m.role,phone:m.phone||'',email:m.email||'',color:m.color,type:m.type}));
+      // Deduplicate members: shorter/simpler name is canonical — remove longer name variants of the same person
+      (function(){
+        var _byLen=db.members.slice().sort(function(a,b){return(a.name||'').length-(b.name||'').length;});
+        var _seen=[];var _keep=new Set();
+        _byLen.forEach(function(m){if(!_seen.some(function(s){return _attNameMatch(s,m.name);})){_seen.push(m.name);_keep.add(m.id);}});
+        db.members=db.members.filter(function(m){return _keep.has(m.id);});
+      })();
       // Fix currentUser.memberId — match by name to get correct backend UUID
       if(currentUser&&currentUser.name){
         var _matched=db.members.find(function(m){return _attNameMatch(m.name,currentUser.name)||_normAttName(m.name)===_normAttName(currentUser.name);});
