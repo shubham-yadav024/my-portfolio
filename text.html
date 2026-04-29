@@ -3865,17 +3865,20 @@ function renderTaskItem(task,compact){
         <a class="gps-map-link" href="https://maps.google.com/?q=${task.location.lat},${task.location.lng}" target="_blank">🗺 View on Map</a>
       </div>`:''}
       ${!compact?`<div class="comment-section">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:8px;display:flex;align-items:center;gap:6px">💬 Comments <span style="background:var(--bg3);padding:1px 6px;border-radius:10px;font-size:10px">${(task.comments||[]).length}</span></div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px;display:flex;align-items:center;gap:6px">💬 Comments <span id="ccnt-${task.id}" style="background:var(--bg3);padding:1px 6px;border-radius:10px;font-size:10px">${(task.comments||[]).length}</span></div>
+        <div id="clist-${task.id}">
         ${(task.comments||[]).length===0?`<div style="font-size:12px;color:var(--text3);font-style:italic;margin-bottom:8px">No comments yet.</div>`:''}
         ${(task.comments||[]).map(c=>{const cm=getMember(c.memberId);return`<div class="comment-item"><div class="comment-av" style="background:${cm.color||'#555'}">${initials(cm.name||c.author||'?')}</div><div class="comment-body"><div class="comment-author">${c.author||cm.name}</div><div class="comment-text" style="white-space:pre-wrap;word-break:break-word">${c.text}</div><div class="comment-time">${fmtAgo(c.time)}</div></div></div>`;}).join('')}
+        </div>
         <div class="comment-input-row">
           <textarea class="comment-input" id="ci-${task.id}" placeholder="Add a comment..." rows="2" style="resize:vertical;min-height:38px" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addComment('${task.id}')}"></textarea>
-          <button class="btn btn-ghost btn-sm" onclick="addComment('${task.id}')" style="flex-shrink:0;align-self:flex-end">Send</button>
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();addComment('${task.id}')" style="flex-shrink:0;align-self:flex-end">Send</button>
           ${task.isField?`<button class="btn btn-ghost btn-sm" onclick="captureGPS('${task.id}')" style="flex-shrink:0;align-self:flex-end;color:var(--teal);border-color:rgba(38,198,218,0.3)">📍 GPS</button>`:''}
         </div>
       </div>
       <div class="comment-section" style="margin-top:10px;border:1px solid rgba(255,193,7,0.25);background:rgba(255,193,7,0.04);border-radius:10px;padding:12px">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);margin-bottom:8px;display:flex;align-items:center;gap:6px">👑 Superior's Note <span style="background:rgba(255,193,7,0.15);padding:1px 6px;border-radius:10px;font-size:10px;color:var(--amber)">${(task.superiorComments||[]).length}</span></div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);margin-bottom:8px;display:flex;align-items:center;gap:6px">👑 Superior's Note <span id="scnt-${task.id}" style="background:rgba(255,193,7,0.15);padding:1px 6px;border-radius:10px;font-size:10px;color:var(--amber)">${(task.superiorComments||[]).length}</span></div>
+        <div id="sclist-${task.id}">
         ${(task.superiorComments||[]).length===0?`<div style="font-size:12px;color:var(--text3);font-style:italic;margin-bottom:8px">No notes from superior yet.</div>`:''}
         ${(task.superiorComments||[]).map((c,ci)=>`<div class="comment-item" style="border-left:2px solid var(--amber);padding-left:8px;margin-bottom:6px">
           <div class="comment-av" style="background:var(--amber);color:#000">${initials(c.author||'A')}</div>
@@ -3886,9 +3889,10 @@ function renderTaskItem(task,compact){
             </div>
           </div>
         </div>`).join('')}
+        </div>
         ${isAdmin()?`<div class="comment-input-row" style="margin-top:8px">
           <textarea class="comment-input" id="sci-${task.id}" placeholder="Add superior note... (Shift+Enter for new line)" rows="2" style="border-color:rgba(255,193,7,0.3);resize:vertical;min-height:38px" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addSuperiorComment('${task.id}')}"></textarea>
-          <button class="btn btn-ghost btn-sm" onclick="addSuperiorComment('${task.id}')" style="flex-shrink:0;align-self:flex-end;color:var(--amber);border-color:rgba(255,193,7,0.3)">Post</button>
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();addSuperiorComment('${task.id}')" style="flex-shrink:0;align-self:flex-end;color:var(--amber);border-color:rgba(255,193,7,0.3)">Post</button>
         </div>`:`<div style="font-size:11px;color:var(--text3);margin-top:4px">🔒 Only admin can add notes here.</div>`}
       </div>`:''}
     </div>
@@ -4341,22 +4345,26 @@ function openMemberDetail(id){
         +photosHtml
         // Comments section
         +'<div style="margin-top:14px;border-top:1px solid var(--border2);padding-top:12px">'
-          +'<div style="font-size:11px;color:var(--text3);margin-bottom:8px;display:flex;align-items:center;gap:6px">💬 Comments <span style="background:var(--bg3);padding:1px 6px;border-radius:10px;font-size:10px">'+((t.comments||[]).length)+'</span></div>'
+          +'<div style="font-size:11px;color:var(--text3);margin-bottom:8px;display:flex;align-items:center;gap:6px">💬 Comments <span id="mdm-ccnt-'+t.id+'" style="background:var(--bg3);padding:1px 6px;border-radius:10px;font-size:10px">'+((t.comments||[]).length)+'</span></div>'
+          +'<div id="mdm-clist-'+t.id+'">'
           +((t.comments||[]).length===0?'<div style="font-size:12px;color:var(--text3);font-style:italic;margin-bottom:8px">No comments yet.</div>':'')
           +(t.comments||[]).map(function(c){var cm=getMember(c.memberId);return'<div style="display:flex;gap:8px;margin-bottom:8px"><div style="width:28px;height:28px;border-radius:50%;background:'+(cm.color||'#555')+';display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">'+initials(cm.name||c.author||'?')+'</div><div style="flex:1"><div style="font-size:12px;font-weight:600;color:var(--text)">'+c.author+'</div><div style="font-size:13px;color:var(--text2);white-space:pre-wrap;word-break:break-word;margin:2px 0">'+c.text+'</div><div style="font-size:10px;color:var(--text3)">'+fmtAgo(c.time)+'</div></div></div>';}).join('')
+          +'</div>'
           +'<div style="display:flex;gap:8px;margin-top:6px">'
             +'<textarea id="mdm-ci-'+t.id+'" class="mdm-comment-input" placeholder="Add a comment..." rows="2" style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;resize:vertical;min-height:38px;font-family:inherit" oninput="this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'"></textarea>'
-            +'<button onclick="event.stopPropagation();addMdmComment(\''+t.id+'\')" style="align-self:flex-end;padding:8px 14px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;cursor:pointer;font-weight:600">Send</button>'
+            +'<button onclick="event.stopPropagation();addComment(\''+t.id+'\')" style="align-self:flex-end;padding:8px 14px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;cursor:pointer;font-weight:600">Send</button>'
           +'</div>'
         +'</div>'
         // Superior's Note
         +'<div style="margin-top:10px;border:1px solid rgba(255,193,7,0.25);background:rgba(255,193,7,0.04);border-radius:10px;padding:12px">'
-          +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);margin-bottom:8px;display:flex;align-items:center;gap:6px">👑 Superior\'s Note <span style="background:rgba(255,193,7,0.15);padding:1px 6px;border-radius:10px;font-size:10px;color:var(--amber)">'+((t.superiorComments||[]).length)+'</span></div>'
+          +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);margin-bottom:8px;display:flex;align-items:center;gap:6px">👑 Superior\'s Note <span id="mdm-scnt-'+t.id+'" style="background:rgba(255,193,7,0.15);padding:1px 6px;border-radius:10px;font-size:10px;color:var(--amber)">'+((t.superiorComments||[]).length)+'</span></div>'
+          +'<div id="mdm-sclist-'+t.id+'">'
           +((t.superiorComments||[]).length===0?'<div style="font-size:12px;color:var(--text3);font-style:italic;margin-bottom:8px">No notes from superior yet.</div>':'')
-          +(t.superiorComments||[]).map(function(c,ci){return'<div style="display:flex;gap:8px;margin-bottom:8px;border-left:2px solid var(--amber);padding-left:8px"><div style="width:28px;height:28px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#000;flex-shrink:0">'+initials(c.author||'A')+'</div><div style="flex:1"><div style="font-size:12px;font-weight:600;color:var(--amber)">'+c.author+' <span style="font-size:10px;background:rgba(255,193,7,0.15);padding:1px 5px;border-radius:6px">Superior</span></div><div style="font-size:13px;color:var(--text2);white-space:pre-wrap;word-break:break-word;margin:2px 0">'+c.text+'</div><div style="font-size:10px;color:var(--text3);display:flex;align-items:center;gap:8px">'+fmtAgo(c.time)+(isAdmin()?'<span onclick="event.stopPropagation();deleteSuperiorComment(\''+t.id+'\','+ci+');setTimeout(function(){openMemberDetail(\''+id+'\');},100)" style="cursor:pointer;color:var(--red);opacity:.7">✕ Delete</span>':'')+'</div></div></div>';}).join('')
+          +(t.superiorComments||[]).map(function(c,ci){return'<div style="display:flex;gap:8px;margin-bottom:8px;border-left:2px solid var(--amber);padding-left:8px"><div style="width:28px;height:28px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#000;flex-shrink:0">'+initials(c.author||'A')+'</div><div style="flex:1"><div style="font-size:12px;font-weight:600;color:var(--amber)">'+c.author+' <span style="font-size:10px;background:rgba(255,193,7,0.15);padding:1px 5px;border-radius:6px">Superior</span></div><div style="font-size:13px;color:var(--text2);white-space:pre-wrap;word-break:break-word;margin:2px 0">'+c.text+'</div><div style="font-size:10px;color:var(--text3);display:flex;align-items:center;gap:8px">'+fmtAgo(c.time)+(isAdmin()?'<span onclick="event.stopPropagation();deleteSuperiorComment(\''+t.id+'\','+ci+')" style="cursor:pointer;color:var(--red);opacity:.7">✕ Delete</span>':'')+'</div></div></div>';}).join('')
+          +'</div>'
           +(isAdmin()?'<div style="display:flex;gap:8px;margin-top:6px">'
             +'<textarea id="mdm-sci-'+t.id+'" class="mdm-comment-input" placeholder="Add superior note..." rows="2" style="flex:1;background:var(--bg3);border:1px solid rgba(255,193,7,0.3);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;resize:vertical;min-height:38px;font-family:inherit" oninput="this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'"></textarea>'
-            +'<button onclick="event.stopPropagation();addMdmSuperiorComment(\''+t.id+'\',\''+id+'\')" style="align-self:flex-end;padding:8px 14px;background:var(--amber);border:none;border-radius:8px;color:#000;font-size:13px;cursor:pointer;font-weight:700">Post</button>'
+            +'<button onclick="event.stopPropagation();addSuperiorComment(\''+t.id+'\')" style="align-self:flex-end;padding:8px 14px;background:var(--amber);border:none;border-radius:8px;color:#000;font-size:13px;cursor:pointer;font-weight:700">Post</button>'
           +'</div>':'<div style="font-size:11px;color:var(--text3);margin-top:4px">🔒 Only admin can add notes here.</div>')
         +'</div>'
         // Action buttons — visible to all
@@ -5003,26 +5011,47 @@ function importBulkTasks(){
 }
 document.querySelectorAll('#ntogs .ntog').forEach(el=>el.addEventListener('click',()=>el.classList.toggle('on')));
 
+// ── Comment helpers — in-place DOM update (no full re-render) ──
+function _refreshComments(taskId){
+  var task=db.tasks.find(function(t){return t.id===taskId;});if(!task)return;
+  var cs=task.comments||[];var ss=task.superiorComments||[];
+  // Task view
+  var cl=document.getElementById('clist-'+taskId);
+  if(cl)cl.innerHTML=cs.length===0?'<div style="font-size:12px;color:var(--text3);font-style:italic;margin-bottom:8px">No comments yet.</div>':cs.map(function(c){var cm=getMember(c.memberId);return'<div class="comment-item"><div class="comment-av" style="background:'+(cm.color||'#555')+'">'+initials(cm.name||c.author||'?')+'</div><div class="comment-body"><div class="comment-author">'+(c.author||cm.name)+'</div><div class="comment-text" style="white-space:pre-wrap;word-break:break-word">'+c.text+'</div><div class="comment-time">'+fmtAgo(c.time)+'</div></div></div>';}).join('');
+  var cb=document.getElementById('ccnt-'+taskId);if(cb)cb.textContent=cs.length;
+  // Superior — task view
+  var sl=document.getElementById('sclist-'+taskId);
+  if(sl)sl.innerHTML=ss.length===0?'<div style="font-size:12px;color:var(--text3);font-style:italic;margin-bottom:8px">No notes from superior yet.</div>':ss.map(function(c,ci){return'<div class="comment-item" style="border-left:2px solid var(--amber);padding-left:8px;margin-bottom:6px"><div class="comment-av" style="background:var(--amber);color:#000">'+initials(c.author||'A')+'</div><div class="comment-body"><div class="comment-author" style="color:var(--amber)">'+c.author+' <span style="font-size:10px;background:rgba(255,193,7,0.15);padding:1px 5px;border-radius:6px;color:var(--amber)">Superior</span></div><div class="comment-text" style="white-space:pre-wrap;word-break:break-word">'+c.text+'</div><div class="comment-time" style="display:flex;align-items:center;gap:8px">'+fmtAgo(c.time)+(isAdmin()?'<span onclick="deleteSuperiorComment(\''+taskId+'\','+ci+')" style="cursor:pointer;color:var(--red);font-size:10px;opacity:.6">✕ Delete</span>':'')+'</div></div></div>';}).join('');
+  var sb=document.getElementById('scnt-'+taskId);if(sb)sb.textContent=ss.length;
+  // Member detail modal
+  var mcl=document.getElementById('mdm-clist-'+taskId);
+  if(mcl)mcl.innerHTML=cs.length===0?'<div style="font-size:12px;color:var(--text3);font-style:italic">No comments yet.</div>':cs.map(function(c){var cm=getMember(c.memberId);return'<div class="comment-item"><div class="comment-av" style="background:'+(cm.color||'#555')+'">'+initials(cm.name||c.author||'?')+'</div><div class="comment-body"><div class="comment-author">'+(c.author||cm.name)+'</div><div class="comment-text" style="white-space:pre-wrap;word-break:break-word">'+c.text+'</div><div class="comment-time">'+fmtAgo(c.time)+'</div></div></div>';}).join('');
+  var mcb=document.getElementById('mdm-ccnt-'+taskId);if(mcb)mcb.textContent=cs.length;
+  var msl=document.getElementById('mdm-sclist-'+taskId);
+  if(msl)msl.innerHTML=ss.length===0?'<div style="font-size:12px;color:var(--text3);font-style:italic">No notes from superior yet.</div>':ss.map(function(c){return'<div class="comment-item" style="border-left:2px solid var(--amber);padding-left:8px;margin-bottom:6px"><div class="comment-av" style="background:var(--amber);color:#000">'+initials(c.author||'A')+'</div><div class="comment-body"><div class="comment-author" style="color:var(--amber)">'+c.author+'</div><div class="comment-text" style="white-space:pre-wrap;word-break:break-word">'+c.text+'</div><div class="comment-time">'+fmtAgo(c.time)+'</div></div></div>';}).join('');
+  var msb=document.getElementById('mdm-scnt-'+taskId);if(msb)msb.textContent=ss.length;
+}
+
 function addComment(taskId){
-  const input=document.getElementById('ci-'+taskId);if(!input)return;
+  const input=document.getElementById('ci-'+taskId)||document.getElementById('mdm-ci-'+taskId);if(!input)return;
   const text=input.value.trim();if(!text){toast('Type a comment first.','warning');return;}
   const task=db.tasks.find(t=>t.id===taskId);if(!task){toast('Task not found, please refresh.','error');return;}
   if(!task.comments)task.comments=[];
   task.comments.push({id:uid(),text,author:currentUser?currentUser.name||currentUser.username:'Unknown',memberId:currentUser?currentUser.memberId||currentUser.id:'',time:now()});
-  task.updatedAt=now();saveDB();input.value='';
-  renderTaskList();renderFieldJobs();renderDashboard();
+  task.updatedAt=now();saveDB();input.value='';input.style.height='auto';
+  _refreshComments(taskId);
   toast('Comment added!','success');
   try{TasksAPI.update(taskId,{comments:task.comments});}catch(e){}
 }
 function addSuperiorComment(taskId){
   if(!isAdmin()){toast('Only admin can add superior notes.','error');return;}
-  const input=document.getElementById('sci-'+taskId);if(!input)return;
+  const input=document.getElementById('sci-'+taskId)||document.getElementById('mdm-sci-'+taskId);if(!input)return;
   const text=input.value.trim();if(!text){toast('Type a note first.','warning');return;}
   const task=db.tasks.find(t=>t.id===taskId);if(!task){toast('Task not found, please refresh.','error');return;}
   if(!task.superiorComments)task.superiorComments=[];
   task.superiorComments.push({id:uid(),text,author:currentUser.name||currentUser.username,time:now()});
-  task.updatedAt=now();saveDB();input.value='';
-  renderTaskList();renderFieldJobs();
+  task.updatedAt=now();saveDB();input.value='';input.style.height='auto';
+  _refreshComments(taskId);
   toast('Superior note posted!','success');
   try{TasksAPI.update(taskId,{superiorComments:task.superiorComments});}catch(e){}
 }
@@ -5031,38 +5060,11 @@ function deleteSuperiorComment(taskId,idx){
   const task=db.tasks.find(t=>t.id===taskId);if(!task||!task.superiorComments)return;
   task.superiorComments.splice(idx,1);
   task.updatedAt=now();saveDB();
-  renderTaskList();renderFieldJobs();
+  _refreshComments(taskId);
   try{TasksAPI.update(taskId,{superiorComments:task.superiorComments});}catch(e){}
 }
-// Member detail modal comment functions
-function addMdmComment(taskId){
-  const input=document.getElementById('mdm-ci-'+taskId);if(!input)return;
-  const text=input.value.trim();if(!text){toast('Type a comment first.','warning');return;}
-  const task=db.tasks.find(t=>t.id===taskId);if(!task){toast('Task not found.','error');return;}
-  if(!task.comments)task.comments=[];
-  task.comments.push({id:uid(),text,author:currentUser?currentUser.name||currentUser.username:'Unknown',memberId:currentUser?currentUser.memberId||currentUser.id:'',time:now()});
-  task.updatedAt=now();saveDB();input.value='';
-  renderTaskList();renderFieldJobs();
-  toast('Comment added!','success');
-  try{TasksAPI.update(taskId,{comments:task.comments});}catch(e){}
-  // Refresh member detail to show new comment
-  var mdmBody=document.getElementById('mdm-ci-'+taskId);
-  if(mdmBody){var det=mdmBody.closest('[id^="mdm-det-"]');if(det){var memberId=det.getAttribute('data-memberid')||'';}}
-}
-function addMdmSuperiorComment(taskId,memberId){
-  if(!isAdmin()){toast('Only admin can add superior notes.','error');return;}
-  const input=document.getElementById('mdm-sci-'+taskId);if(!input)return;
-  const text=input.value.trim();if(!text){toast('Type a note first.','warning');return;}
-  const task=db.tasks.find(t=>t.id===taskId);if(!task){toast('Task not found.','error');return;}
-  if(!task.superiorComments)task.superiorComments=[];
-  task.superiorComments.push({id:uid(),text,author:currentUser.name||currentUser.username,time:now()});
-  task.updatedAt=now();saveDB();input.value='';
-  renderTaskList();renderFieldJobs();
-  toast('Superior note posted!','success');
-  try{TasksAPI.update(taskId,{superiorComments:task.superiorComments});}catch(e){}
-  // Refresh modal to show updated notes
-  if(memberId)setTimeout(function(){openMemberDetail(memberId);},100);
-}
+function addMdmComment(taskId){return addComment(taskId);}
+function addMdmSuperiorComment(taskId,memberId){return addSuperiorComment(taskId);}
 function captureGPS(taskId){
   if(!navigator.geolocation){toast('GPS is not supported on this device','error');return;}
   toast('📍 Retrieving your current location...','info');
