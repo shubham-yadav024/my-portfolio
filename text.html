@@ -3320,7 +3320,17 @@ async function syncFromDB(){
     }
     const actRes=await ActivityAPI.getAll(30);
     if(actRes?.success){db.activity=actRes.activities.map(a=>({id:a.id,msg:a.msg,type:a.type,time:a.created_at}));}
-    if(typeof renderAll==='function')renderAll();
+    if(typeof renderAll==='function'){
+      var _fa=document.activeElement;
+      var _cf=_fa&&_fa.id&&/^(ci-|sci-|mdm-ci-|mdm-sci-)/.test(_fa.id);
+      if(_cf){
+        // User is typing a comment — skip task list re-render, only refresh non-destructive parts
+        if(typeof renderDashboard==='function')renderDashboard();
+        if(typeof updateBadges==='function')updateBadges();
+      }else{
+        renderAll();
+      }
+    }
   }catch(err){}
 }
 document.addEventListener('DOMContentLoaded',()=>{if(AuthAPI.isLoggedIn()){syncFromDB();setInterval(syncFromDB,5000);setInterval(function(){var fa=document.activeElement;var commentFocused=fa&&fa.id&&/^(ci-|sci-|mdm-ci-|mdm-sci-)/.test(fa.id);if(!commentFocused&&typeof renderTaskList==='function')renderTaskList();if(typeof renderDashboard==='function')renderDashboard();var accV=document.getElementById('view-account');if(accV&&accV.style.display!=='none'&&typeof renderAccountList==='function')renderAccountList();},1000);setInterval(function(){if(typeof updateAllPresenceDots==='function')updateAllPresenceDots();},5000);setInterval(function(){if(typeof _refreshOnlineFromAtt==='function')_refreshOnlineFromAtt();},30000);setInterval(function(){var accV=document.getElementById('view-account');if(accV&&accV.style.display!=='none')syncAccountFromSupabase();},5000);setInterval(_checkStorageUsage,60000);setTimeout(_checkStorageUsage,5000);}});
@@ -3585,7 +3595,6 @@ function launchApp(){
   if(dot){if(cfg.url){dot.textContent='✅ Webhook active';dot.style.color='var(--green)';}else{dot.textContent='Not configured';dot.style.color='var(--text3)';}}
   renderDashboard();updateBadges();scheduleAll();
   syncFromDB();
-  setInterval(syncFromDB,5000); // backend fetch every 5s
   setInterval(function(){
     // Only re-render dashboard (hours badge, stats) — task list re-render only on explicit actions or syncFromDB
     if(typeof renderDashboard==='function')renderDashboard();
