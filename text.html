@@ -2552,13 +2552,12 @@ async function attendanceLogout(){
   var totalKey='att_total_'+memberId+'_'+today;
   var sessKey='att_sess_'+memberId+'_'+today;
 
-  // Calculate this session's hours and add to running total
-  var sessHours=sessStart?Math.max(0,(now-new Date(sessStart))/3600000):0;
-  var prevHours=parseFloat(localStorage.getItem(totalKey)||0);
-  var newTotal=prevHours+sessHours;
-  localStorage.setItem(totalKey,newTotal.toFixed(4)); // persist accumulated total
-  // Also save to stable key (survives member-id changes)
+  // Total = now - first login of the day (wall clock, includes breaks)
   var _uid2=currentUser&&currentUser.id||memberId;
+  var _firstKey='att_s_'+_uid2+'_first_'+today;
+  var firstLoginStr=localStorage.getItem(_firstKey)||localStorage.getItem('att_login_'+memberId+'_'+today)||sessStart;
+  var newTotal=firstLoginStr?Math.max(0,(now-new Date(firstLoginStr))/3600000):0;
+  localStorage.setItem(totalKey,newTotal.toFixed(4));
   localStorage.setItem('att_s_'+_uid2+'_total_'+today,newTotal.toFixed(4));
 
   // Read IDs before clearing
@@ -2626,8 +2625,13 @@ function _startAttTimer(){
 
 function _updateActiveHoursDisplay(){
   if(!_attLoginTime)return;
-  var sessionMs=Date.now()-_attLoginTime.getTime();
-  var totalMs=sessionMs+(_attPrevHours*3600000);
+  // Total = now - first login of the day (wall clock)
+  var _today=new Date().toISOString().slice(0,10);
+  var _suid=currentUser&&currentUser.id;
+  var _mid=localStorage.getItem('att_member_id')||(currentUser&&(currentUser.memberId||currentUser.id));
+  var _firstStr=(_suid&&localStorage.getItem('att_s_'+_suid+'_first_'+_today))||(_mid&&localStorage.getItem('att_login_'+_mid+'_'+_today));
+  var _firstTime=_firstStr?new Date(_firstStr):_attLoginTime;
+  var totalMs=Date.now()-_firstTime.getTime();
   var h=Math.floor(totalMs/3600000);
   var m=Math.floor((totalMs%3600000)/60000);
   var str=(h>0?h+'h ':'')+m+'m';
@@ -2641,11 +2645,12 @@ function _updateActiveHoursDisplay(){
   // Uses prevHours (accumulated from completed sessions) + current session duration
   document.querySelectorAll('.live-att-hours[data-sess-start]').forEach(function(span){
     var sessStart=span.getAttribute('data-sess-start');
-    if(!sessStart)return;
-    var prevH=parseFloat(span.getAttribute('data-prev-hours')||0);
-    var ms=Date.now()-new Date(sessStart).getTime();
+    // Wall clock: now - first login of day (includes breaks)
+    var firstLogin=span.getAttribute('data-first-login')||sessStart;
+    if(!firstLogin)return;
+    var ms=Date.now()-new Date(firstLogin).getTime();
     if(ms<0)return;
-    var totalH=prevH+(ms/3600000);
+    var totalH=ms/3600000;
     var h=Math.floor(totalH);
     var m=Math.floor((totalH%1)*60);
     span.textContent=(h>0?h+'h ':'')+m+'m';
@@ -2674,9 +2679,8 @@ function _updateEmpAttCard(){
   // Login time display — first login time of day
   var loginEl=document.getElementById('emp-att-login');
   if(loginEl)loginEl.textContent=firstLogin?new Date(firstLogin).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
-  // Hours: use _attPrevHours + current session (most accurate when active)
-  var hours=_attLoginTime?(_attPrevHours+Math.max(0,(Date.now()-_attLoginTime)/3600000)):prevHours;
-  if(!_attLoginTime&&activeSess&&localStorage.getItem(sessKey))hours+=Math.max(0,(Date.now()-new Date(activeSess))/3600000);
+  // Hours = now - first login (wall clock), or saved total if logged out
+  var hours=firstLogin?Math.max(0,(Date.now()-new Date(firstLogin))/3600000):prevHours;
   var h=Math.floor(hours);var m=Math.round((hours%1)*60);
   var hoursEl=document.getElementById('emp-att-hours');
   if(hoursEl)hoursEl.textContent=(h>0?h+'h ':'')+m+'m';
@@ -2855,8 +2859,8 @@ async function loadAttendance(){
       var activeSess=localStorage.getItem(sessKey);
       var isPresent=!!firstLogin; // was present today
       var prevHours=parseFloat(localStorage.getItem(totalKey)||0);
-      var hours=prevHours;
-      if(activeSess) hours+=Math.max(0,(Date.now()-new Date(activeSess))/3600000);
+      // Wall clock: now - first login (includes breaks)
+      var hours=firstLogin?Math.max(0,(Date.now()-new Date(firstLogin))/3600000):prevHours;
       return{member:m,today_status:isPresent?'present':'absent',login_time:firstLogin||null,logout_time:null,today_hours:hours.toFixed(1),isActive:!!activeSess,prevHours:prevHours,sessStart:activeSess||''};
     });
   }
@@ -2895,7 +2899,7 @@ async function loadAttendance(){
         </div>
         <div style="text-align:center;min-width:70px"><div style="font-size:11px;color:var(--text3)">Login</div><div class="att-login" style="font-size:13px;font-weight:500">${loginTime}</div></div>
         <div style="text-align:center;min-width:70px"><div style="font-size:11px;color:var(--text3)">Logout</div><div class="att-logout" style="font-size:13px;font-weight:500">${logoutTime}</div></div>
-        <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--text3)">Hours</div><div class="att-hours" style="font-size:14px;font-weight:700;color:${hoursColor}">${isActive?`<span class="live-att-hours" data-id="${m.id}" data-sess-start="${s.sessStart||''}" data-prev-hours="${s.prevHours||0}">${hours}h</span>`:hours+'h'}</div></div>
+        <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--text3)">Hours</div><div class="att-hours" style="font-size:14px;font-weight:700;color:${hoursColor}">${isActive?`<span class="live-att-hours" data-id="${m.id}" data-sess-start="${s.sessStart||''}" data-prev-hours="${s.prevHours||0}" data-first-login="${s.login_time||''}">${hours}h</span>`:hours+'h'}</div></div>
         <span class="att-badge" style="display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;${badgeStyle}">
           ${badgeContent}
         </span>
