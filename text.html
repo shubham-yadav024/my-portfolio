@@ -3319,7 +3319,7 @@ async function syncFromDB(){
     if(typeof renderAll==='function')renderAll();
   }catch(err){}
 }
-document.addEventListener('DOMContentLoaded',()=>{if(AuthAPI.isLoggedIn()){syncFromDB();setInterval(syncFromDB,5000);setInterval(function(){if(typeof renderTaskList==='function')renderTaskList();if(typeof renderDashboard==='function')renderDashboard();var accV=document.getElementById('view-account');if(accV&&accV.style.display!=='none'&&typeof renderAccountList==='function')renderAccountList();},1000);setInterval(function(){var accV=document.getElementById('view-account');if(accV&&accV.style.display!=='none')syncAccountFromSupabase();},5000);setInterval(_checkStorageUsage,60000);setTimeout(_checkStorageUsage,5000);}});
+document.addEventListener('DOMContentLoaded',()=>{if(AuthAPI.isLoggedIn()){syncFromDB();setInterval(syncFromDB,5000);setInterval(function(){var fa=document.activeElement;var commentFocused=fa&&fa.id&&/^(ci-|sci-|mdm-ci-|mdm-sci-)/.test(fa.id);if(!commentFocused&&typeof renderTaskList==='function')renderTaskList();if(typeof renderDashboard==='function')renderDashboard();var accV=document.getElementById('view-account');if(accV&&accV.style.display!=='none'&&typeof renderAccountList==='function')renderAccountList();},1000);setInterval(function(){var accV=document.getElementById('view-account');if(accV&&accV.style.display!=='none')syncAccountFromSupabase();},5000);setInterval(_checkStorageUsage,60000);setTimeout(_checkStorageUsage,5000);}});
 
 // ═══ PRESENCE ═══
 let presenceChannel=null;let onlineUserIds=new Set();
