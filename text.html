@@ -3319,7 +3319,7 @@ async function syncFromDB(){
     if(typeof renderAll==='function')renderAll();
   }catch(err){}
 }
-document.addEventListener('DOMContentLoaded',()=>{if(AuthAPI.isLoggedIn()){syncFromDB();setInterval(syncFromDB,5000);setInterval(function(){var fa=document.activeElement;var commentFocused=fa&&fa.id&&/^(ci-|sci-|mdm-ci-|mdm-sci-)/.test(fa.id);if(!commentFocused&&typeof renderTaskList==='function')renderTaskList();if(typeof renderDashboard==='function')renderDashboard();var accV=document.getElementById('view-account');if(accV&&accV.style.display!=='none'&&typeof renderAccountList==='function')renderAccountList();},1000);setInterval(function(){if(typeof updateAllPresenceDots==='function')updateAllPresenceDots();},5000);setInterval(function(){var accV=document.getElementById('view-account');if(accV&&accV.style.display!=='none')syncAccountFromSupabase();},5000);setInterval(_checkStorageUsage,60000);setTimeout(_checkStorageUsage,5000);}});
+document.addEventListener('DOMContentLoaded',()=>{if(AuthAPI.isLoggedIn()){syncFromDB();setInterval(syncFromDB,5000);setInterval(function(){var fa=document.activeElement;var commentFocused=fa&&fa.id&&/^(ci-|sci-|mdm-ci-|mdm-sci-)/.test(fa.id);if(!commentFocused&&typeof renderTaskList==='function')renderTaskList();if(typeof renderDashboard==='function')renderDashboard();var accV=document.getElementById('view-account');if(accV&&accV.style.display!=='none'&&typeof renderAccountList==='function')renderAccountList();},1000);setInterval(function(){if(typeof updateAllPresenceDots==='function')updateAllPresenceDots();},5000);setInterval(function(){if(typeof _refreshOnlineFromAtt==='function')_refreshOnlineFromAtt();},60000);setInterval(function(){var accV=document.getElementById('view-account');if(accV&&accV.style.display!=='none')syncAccountFromSupabase();},5000);setInterval(_checkStorageUsage,60000);setTimeout(_checkStorageUsage,5000);}});
 
 // ═══ PRESENCE ═══
 let presenceChannel=null;let onlineUserIds=new Set();
@@ -3361,7 +3361,26 @@ async function initPresence(){
     });
   }catch(e){}
 }
-function isOnline(memberId){return onlineUserIds.has(memberId);}
+// Members active in today's attendance (no logout_time) — sourced from Supabase
+let activeAttMemberIds=new Set();
+async function _refreshOnlineFromAtt(){
+  if(new Date().getDay()===0)return;
+  var today=new Date().toISOString().slice(0,10);
+  try{
+    var data=await _loadAttFromSupa(today);
+    if(!data)return;
+    var s=new Set();
+    data.forEach(function(r){
+      if(r.login_time&&!r.logout_time){
+        var m=db.members.find(function(x){return x.id===r.member_id||_attNameMatch(x.name,r.member_name||'');});
+        if(m)s.add(m.id);
+      }
+    });
+    activeAttMemberIds=s;
+    updateAllPresenceDots();
+  }catch(e){}
+}
+function isOnline(memberId){return onlineUserIds.has(memberId)||activeAttMemberIds.has(memberId);}
 function updateAllPresenceDots(){
   db.members.forEach(m=>{
     const dot=document.getElementById('pdot-'+m.id);const lbl=document.getElementById('plbl-'+m.id);
@@ -3562,6 +3581,8 @@ function launchApp(){
     if(typeof renderDashboard==='function')renderDashboard();
   },1000); // UI re-render every 1s
   initPresence();
+  // Populate online status from attendance data immediately after launch
+  setTimeout(function(){if(typeof _refreshOnlineFromAtt==='function')_refreshOnlineFromAtt();},2000);
 }
 
 // ═══════════════════════════════════════════
@@ -3679,7 +3700,7 @@ function showView(name,el){
   if(name==='escalation')renderEscalation();
   if(name==='analytics')renderAnalytics();
   if(name==='attendance'){loadAttendance();_startAttPanelRefresh();}else{_stopAttPanelRefresh();}
-  if(name==='team')renderTeam();
+  if(name==='team'){renderTeam();setTimeout(function(){if(typeof _refreshOnlineFromAtt==='function')_refreshOnlineFromAtt();},500);}
   if(name==='chat')loadChat();
   if(name==='chat')loadChat();
   if(name==='dm')initDM();
