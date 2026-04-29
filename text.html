@@ -2989,6 +2989,10 @@ async function loadAttendance(){
   }
 
   function _renderSummary(summary){
+    // Sync online status with attendance Active state — same source of truth
+    var _actSet=new Set();
+    summary.forEach(function(s){if(s.isActive||(s.today_status==='present'&&!s.logout_time&&s.login_time))_actSet.add(s.member.id);});
+    if(_actSet.size>0){activeAttMemberIds=_actSet;if(typeof updateAllPresenceDots==='function')updateAllPresenceDots();}
     const present=summary.filter(s=>s.today_status==='present').length;
     const absent=summary.filter(s=>s.today_status==='absent').length;
     const totalHours=summary.filter(s=>parseFloat(s.today_hours)>0).reduce((sum,s)=>sum+parseFloat(s.today_hours),0);
@@ -4427,6 +4431,7 @@ function renderTeam(){
     const typeColors={office:'var(--blue)',field:'var(--teal)',both:'var(--accent)'};
     const typeLabels={office:'Office',field:'Field',both:'Office + Field'};
     const online=isOnline(m.id);
+    const isAdminMember=m.role==='admin'||m.role==='reviewer';
     return`<div class="tc" onclick="openMemberDetail('${m.id}')" style="cursor:pointer">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
         <div class="tc-av" style="background:${m.color}">${initials(m.name)}</div>
@@ -4434,12 +4439,12 @@ function renderTeam(){
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
         <div class="tc-name" style="margin-bottom:0">${m.name}</div>
-        <div style="display:flex;align-items:center;gap:5px">
+        ${isAdminMember?'<span style="font-size:10px;color:var(--text3);opacity:.5">Admin</span>':`<div style="display:flex;align-items:center;gap:5px">
           <div class="presence-dot ${online?'online':'offline'}" id="pdot-${m.id}"></div>
           <span id="plbl-${m.id}" style="font-size:10px;color:${online?'var(--green)':'var(--text3)'}">${online?'● Online':'○ Offline'}</span>
-        </div>
+        </div>`}
       </div>
-      <div class="tc-role">${m.role||'Team Member'}</div>
+      <div class="tc-role">${m.role==='admin'?'Admin':m.role||'Team Member'}</div>
       <div style="margin-bottom:8px"><span style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,0.06);color:${typeColors[m.type]||typeColors.office}">${typeLabels[m.type]||'Office'}</span></div>
       ${m.phone?`<div style="font-size:12px;color:var(--text3);margin-bottom:2px">📱 ${m.phone}</div>`:''}
       ${m.email?`<div style="font-size:12px;color:var(--text3);margin-bottom:8px">✉️ ${m.email}</div>`:''}
