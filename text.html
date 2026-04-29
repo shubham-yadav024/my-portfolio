@@ -1231,6 +1231,33 @@ textarea.fctl{resize:vertical;min-height:65px;}
   </div>
 </div>
 
+<!-- EMPLOYEE ATTENDANCE DETAIL MODAL -->
+<div class="moverlay" id="emp-att-modal" onclick="if(event.target===this)closeModal('emp-att-modal')">
+  <div class="modal" style="max-width:620px;max-height:85vh;display:flex;flex-direction:column">
+    <div class="mhead" style="flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div id="emp-att-modal-av" style="width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0"></div>
+        <div>
+          <h2 id="emp-att-modal-name" style="margin:0;font-size:17px"></h2>
+          <div id="emp-att-modal-role" style="font-size:12px;color:var(--text3);margin-top:1px"></div>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('emp-att-modal')">✕</button>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;padding:12px 0 8px;flex-shrink:0;border-bottom:1px solid var(--border)">
+      <div class="scard" style="flex:1;min-width:80px;padding:10px 14px"><div class="sl">Days Present</div><div class="sv" id="emp-att-days" style="font-size:20px">0</div></div>
+      <div class="scard" style="flex:1;min-width:80px;padding:10px 14px"><div class="sl">Total Hours</div><div class="sv" id="emp-att-total-hrs" style="font-size:20px;color:var(--green)">0h</div></div>
+      <div class="scard" style="flex:1;min-width:80px;padding:10px 14px"><div class="sl">Avg / Day</div><div class="sv" id="emp-att-avg-hrs" style="font-size:20px;color:var(--amber)">0h</div></div>
+    </div>
+    <div id="emp-att-modal-list" style="overflow-y:auto;flex:1;padding:4px 0">
+      <div style="text-align:center;color:var(--text3);padding:2rem">Loading...</div>
+    </div>
+    <div style="padding:12px 0 0;flex-shrink:0;border-top:1px solid var(--border);text-align:right">
+      <button class="btn btn-primary" onclick="downloadEmpAtt()">⬇ Download CSV</button>
+    </div>
+  </div>
+</div>
+
 <!-- TASK REPORT MODAL -->
 <div class="moverlay" id="task-report-modal" onclick="if(event.target===this)closeModal('task-report-modal')">
   <div class="modal" style="max-width:460px">
@@ -2753,6 +2780,95 @@ function renderChatMessages(){
   container.scrollTop=container.scrollHeight;
 }
 // sendChatMessage is defined in file-sharing script block above
+// ── Employee Attendance Detail ──────────────────────────
+var _empAttData=[];var _empAttMember=null;
+async function openEmpAttDetail(memberId){
+  var member=db.members.find(function(m){return m.id===memberId;});
+  if(!member)return;
+  _empAttMember=member;
+  // Set header
+  document.getElementById('emp-att-modal-av').style.background=member.color||'#666';
+  document.getElementById('emp-att-modal-av').textContent=initials(member.name);
+  document.getElementById('emp-att-modal-name').textContent=member.name;
+  document.getElementById('emp-att-modal-role').textContent=member.role||'';
+  document.getElementById('emp-att-days').textContent='...';
+  document.getElementById('emp-att-total-hrs').textContent='...';
+  document.getElementById('emp-att-avg-hrs').textContent='...';
+  document.getElementById('emp-att-modal-list').innerHTML='<div style="text-align:center;color:var(--text3);padding:2rem">Loading...</div>';
+  openModal('emp-att-modal');
+  // Fetch all records for this member from Supabase
+  try{
+    var supa=await _getAttSupa();
+    if(!supa)throw new Error('no supa');
+    var res=await supa.from('attendance').select('*')
+      .or('member_id.eq.'+memberId+',member_name.ilike.'+encodeURIComponent('%'+member.name+'%'))
+      .order('date',{ascending:false});
+    var rows=(res&&res.data)?res.data:[];
+    // Deduplicate by date
+    var map={};
+    rows.forEach(function(r){
+      var key=r.date;
+      if(!map[key]){map[key]=Object.assign({},r);}
+      else{
+        var ex=map[key];
+        if(r.login_time&&ex.login_time&&new Date(r.login_time)<new Date(ex.login_time))ex.login_time=r.login_time;
+        if(!r.logout_time)ex.logout_time=null;
+        else if(ex.logout_time&&new Date(r.logout_time)>new Date(ex.logout_time))ex.logout_time=r.logout_time;
+        ex.total_hours=Math.max(parseFloat(ex.total_hours||0),parseFloat(r.total_hours||0));
+      }
+    });
+    _empAttData=Object.values(map).sort(function(a,b){return b.date.localeCompare(a.date);});
+    _renderEmpAttModal();
+  }catch(e){
+    document.getElementById('emp-att-modal-list').innerHTML='<div style="text-align:center;color:var(--red);padding:2rem">Could not load data</div>';
+  }
+}
+function _renderEmpAttModal(){
+  var rows=_empAttData;
+  var totalH=rows.reduce(function(s,r){return s+parseFloat(r.total_hours||0);},0);
+  var avgH=rows.length?totalH/rows.length:0;
+  document.getElementById('emp-att-days').textContent=rows.length;
+  document.getElementById('emp-att-total-hrs').textContent=Math.floor(totalH)+'h '+Math.round((totalH%1)*60)+'m';
+  document.getElementById('emp-att-avg-hrs').textContent=Math.floor(avgH)+'h '+Math.round((avgH%1)*60)+'m';
+  if(!rows.length){document.getElementById('emp-att-modal-list').innerHTML='<div style="text-align:center;color:var(--text3);padding:2rem">No attendance records found</div>';return;}
+  document.getElementById('emp-att-modal-list').innerHTML=rows.map(function(r){
+    var dateStr=new Date(r.date+'T12:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+    var loginT=r.login_time?new Date(r.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
+    var logoutT=r.logout_time?new Date(r.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):(r.session_start?'<span style="color:var(--green);font-weight:600">Active</span>':'—');
+    var hrs=parseFloat(r.total_hours||0);
+    var hStr=Math.floor(hrs)+'h '+Math.round((hrs%1)*60)+'m';
+    var hColor=hrs>6?'var(--green)':hrs>3?'var(--amber)':'var(--text2)';
+    return'<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border)">'
+      +'<div style="flex:1"><div style="font-size:13px;font-weight:500">'+dateStr+'</div></div>'
+      +'<div style="text-align:center;min-width:75px"><div style="font-size:10px;color:var(--text3)">Login</div><div style="font-size:13px;font-weight:500">'+loginT+'</div></div>'
+      +'<div style="text-align:center;min-width:75px"><div style="font-size:10px;color:var(--text3)">Logout</div><div style="font-size:13px;font-weight:500">'+logoutT+'</div></div>'
+      +'<div style="text-align:center;min-width:65px"><div style="font-size:10px;color:var(--text3)">Hours</div><div style="font-size:14px;font-weight:700;color:'+hColor+'">'+hStr+'</div></div>'
+      +'<span style="background:var(--green-bg);color:var(--green);font-size:10px;font-weight:600;padding:3px 10px;border-radius:10px">✅ Present</span>'
+      +'</div>';
+  }).join('');
+}
+function downloadEmpAtt(){
+  if(!_empAttMember||!_empAttData.length){toast('No data to download','error');return;}
+  var lines=['Sr,Date,Day,Login Time,Logout Time,Total Hours'];
+  _empAttData.forEach(function(r,i){
+    var d=new Date(r.date+'T12:00');
+    var dateStr=d.toLocaleDateString('en-IN',{day:'2-digit',month:'2-digit',year:'numeric'});
+    var dayStr=d.toLocaleDateString('en-IN',{weekday:'long'});
+    var loginT=r.login_time?new Date(r.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
+    var logoutT=r.logout_time?new Date(r.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
+    var hrs=parseFloat(r.total_hours||0);
+    var hStr=Math.floor(hrs)+'h '+Math.round((hrs%1)*60)+'m';
+    lines.push([(i+1),'"'+dateStr+'"','"'+dayStr+'"','"'+loginT+'"','"'+logoutT+'"','"'+hStr+'"'].join(','));
+  });
+  var csv=lines.join('\r\n');
+  var blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;a.download='Attendance_'+_empAttMember.name.replace(/\s+/g,'_')+'.csv';
+  a.click();URL.revokeObjectURL(url);
+  toast('Downloaded!','success');
+}
+
 async function exportAttendanceExcel(){
   const today=new Date().toISOString().slice(0,10);
   const from=document.getElementById('att-from')?.value||today;
@@ -2895,7 +3011,7 @@ async function loadAttendance(){
       const hoursColor=parseFloat(hours)>6?'var(--green)':parseFloat(hours)>3?'var(--amber)':'var(--text2)';
       const badgeStyle=isActive?'background:var(--green-bg);color:var(--green)':isLoggedOut?'background:var(--blue-bg);color:var(--blue)':'background:var(--red-bg);color:var(--red)';
       const badgeContent=isActive?'<span style="width:6px;height:6px;border-radius:50%;background:#2ecc8a;animation:pulse-dot 1.4s infinite;display:inline-block"></span> Active':isLoggedOut?'🔵 Logged Out':'❌ Absent';
-      return`<div class="att-row" data-mid="${m.id}" style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);${isMe?'background:rgba(46,125,50,0.04);margin:0 -1rem;padding-left:1rem;padding-right:1rem;border-radius:8px':''}">
+      return`<div class="att-row" data-mid="${m.id}" onclick="openEmpAttDetail('${m.id}')" style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;${isMe?'background:rgba(46,125,50,0.04);':''}">
         <div style="position:relative;flex-shrink:0">
           <div class="oavatar" style="background:${m.color||'#666'};width:36px;height:36px;font-size:13px">${initials(m.name)}</div>
           <div class="att-dot" style="display:${isActive?'block':'none'};position:absolute;bottom:0;right:0;width:10px;height:10px;border-radius:50%;border:2px solid var(--card);background:#2ecc8a"></div>
