@@ -1992,7 +1992,7 @@ async function sendChatMessage() {
 
   var supa = await _getGCSupa();
   var senderName = (currentUser && currentUser.name) ? currentUser.name : 'You';
-  var senderId   = (currentUser && currentUser.id)   ? currentUser.id   : 'unknown';
+  var senderId   = currentUser ? (currentUser.memberId || currentUser.id || 'unknown') : 'unknown';
 
   // Collect reply info before clearing
   var replyId   = _gcReplyTo ? _gcReplyTo.id   : null;
@@ -2010,7 +2010,7 @@ async function sendChatMessage() {
       gcCancelReply();
       if (supa) {
         var payload = JSON.stringify({ n: senderName, t: content, r: replyId, rn: replyName, rt: replyText });
-        await supa.from('messages').insert({ sender_id: senderId, receiver_id: 'group-general', content: payload, is_read: false });
+        await supa.from('messages').insert({ sender_id: senderId, receiver_id: 'group-general', content: payload });
       }
       toast('File sent!', 'success');
     } catch(e) {
@@ -2026,10 +2026,11 @@ async function sendChatMessage() {
   if (supa) {
     try {
       var payload = JSON.stringify({ n: senderName, t: caption, r: replyId, rn: replyName, rt: replyText });
-      await supa.from('messages').insert({ sender_id: senderId, receiver_id: 'group-general', content: payload, is_read: false });
+      var res = await supa.from('messages').insert({ sender_id: senderId, receiver_id: 'group-general', content: payload });
+      if (res && res.error) throw res.error;
       // Realtime subscription handles UI update automatically
     } catch(e) {
-      // Local fallback — show immediately without realtime
+      // Local fallback — show immediately
       chatMessages.push({ id: Date.now(), sender_id: senderId, sender_name: senderName, content: JSON.stringify({ n: senderName, t: caption }), created_at: new Date().toISOString() });
       renderChatMessages();
     }
@@ -3880,7 +3881,6 @@ function showView(name,el){
   if(name==='analytics')renderAnalytics();
   if(name==='attendance'){loadAttendance();_startAttPanelRefresh();}else{_stopAttPanelRefresh();}
   if(name==='team'){renderTeam();setTimeout(function(){if(typeof _refreshOnlineFromAtt==='function')_refreshOnlineFromAtt();},500);}
-  if(name==='chat')loadChat();
   if(name==='chat')loadChat();
   if(name==='dm')initDM();
   if(name==='activity')renderActivity();
