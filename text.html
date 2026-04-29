@@ -196,6 +196,14 @@ textarea.fctl{resize:vertical;min-height:65px;}
 .presence-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;transition:all .3s;}
 .presence-dot.online{background:#2ecc8a;box-shadow:0 0 6px #2ecc8a;}
 .presence-dot.offline{background:#444;}
+.dm-wrap{position:relative;display:flex;flex-direction:column;align-items:inherit}
+.dm-wrap:hover .dm-actions{opacity:1;pointer-events:auto}
+.dm-actions{opacity:0;pointer-events:none;display:flex;gap:4px;margin-top:2px;transition:opacity .15s}
+.dm-act-btn{background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;color:var(--text3);transition:all .15s}
+.dm-act-btn:hover{background:var(--bg2);color:var(--text)}
+.dm-popup{position:fixed;bottom:80px;right:20px;background:var(--card);border:1px solid var(--border2);border-radius:14px;padding:14px 16px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:9999;cursor:pointer;max-width:290px;animation:slideUp .25s ease;display:flex;align-items:center;gap:12px}
+.dm-popup:hover{background:var(--bg3)}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
 .comment-section{margin-top:10px;border-top:1px solid var(--border);padding-top:10px;}
 .comment-item{display:flex;gap:8px;margin-bottom:10px;}
 .comment-av{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;}
@@ -1372,6 +1380,21 @@ var DM = (function(){
         updateBadges();
         renderMembersList();
       }
+      // Global listener — fires even when DM view is closed
+      supa.channel('dm-global-'+me)
+        .on('postgres_changes', {event:'INSERT', schema:'public', table:'messages', filter:'receiver_id=eq.'+me}, function(payload) {
+          var msg = payload.new;
+          if (!msg || msg.sender_id===me) return;
+          var alreadyOpen = currentPeer && currentPeer.id===msg.sender_id;
+          unread[msg.sender_id] = (unread[msg.sender_id]||0) + (alreadyOpen ? 0 : 1);
+          updateBadges();
+          renderMembersList();
+          if (!alreadyOpen || document.visibilityState==='hidden') {
+            var sM = db.members.find(function(m){ return m.id===msg.sender_id; });
+            if (typeof showDMPopup==='function') showDMPopup(msg.sender_id, sM?sM.name:'Someone', msg.content||'📎 File');
+          }
+          if (alreadyOpen) loadMessages(currentPeer.id);
+        }).subscribe();
     } catch(e) { /* Supabase not reachable yet */ }
   }
 
@@ -1443,8 +1466,8 @@ var DM = (function(){
       hdr.innerHTML =
         '<div style="width:32px;height:32px;border-radius:50%;background:'+member.color+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">'+initials(member.name)+'</div>'
         +'<span style="font-size:15px;font-weight:600;color:var(--text)">'+esc(member.name)+'</span>'
-        +'<div style="width:9px;height:9px;border-radius:50%;background:'+(online?'#2ecc8a':'#555')+';flex-shrink:0"></div>'
-        +'<span style="font-size:12px;color:'+(online?'var(--green)':'var(--text3)')+';">'+(online?'Online':'Offline')+'</span>';
+        +'<div class="dm-hdr-dot" style="width:9px;height:9px;border-radius:50%;background:'+(online?'#2ecc8a':'#555')+';flex-shrink:0"></div>'
+        +'<span class="dm-hdr-lbl" style="font-size:12px;color:'+(online?'var(--green)':'var(--text3)')+';">'+(online?'Online':'Offline')+'</span>';
     }
 
     // Show input
@@ -1557,12 +1580,32 @@ var DM = (function(){
       }
 
       var isFile = msg.content && msg.content.includes('__FILE__:');
-      var bubbleContent = isFile
-        ? (typeof _renderFileContent === 'function' ? (_renderFileContent(msg.content)||esc(msg.content)) : esc(msg.content))
-        : esc(msg.content);
-
-      html += '<div class="dm-msg-bubble" style="display:flex;flex-direction:column;align-items:'+(isMine?'flex-end':'flex-start')+'">'
-        +'<div style="max-width:72%;padding:'+(isFile?'10px':'10px 14px')+';border-radius:'
+      var isDeleted = msg.is_deleted;
+      var rawContent = isDeleted ? '' : msg.content;
+      var bubbleContent = isDeleted
+        ? '<span style="font-style:italic;opacity:.55;font-size:13px">🚫 This message was deleted</span>'
+        : (isFile
+          ? (typeof _renderFileContent === 'function' ? (_renderFileContent(rawContent)||esc(rawContent)) : esc(rawContent))
+          : esc(rawContent));
+      // Tick: ✓ sent, ✓✓ gray=delivered(online), ✓✓ blue=read
+      var tickHtml = '';
+      if (isMine) {
+        if (msg.is_read) {
+          tickHtml = '<span style="color:#4fc3f7;font-size:12px;letter-spacing:-2px;line-height:1" title="Seen">✓✓</span>';
+        } else if (currentPeer && isOnline(currentPeer.id)) {
+          tickHtml = '<span style="color:var(--text2);font-size:12px;letter-spacing:-2px;line-height:1" title="Delivered">✓✓</span>';
+        } else {
+          tickHtml = '<span style="color:var(--text3);font-size:12px;line-height:1" title="Sent">✓</span>';
+        }
+      }
+      var actionsHtml = (isMine && !isDeleted)
+        ? '<div class="dm-actions">'
+          +'<button class="dm-act-btn" onclick="DM.editMsg(\''+msg.id+'\')">✏️ Edit</button>'
+          +'<button class="dm-act-btn" style="color:var(--red)" onclick="DM.deleteMsg(\''+msg.id+'\')">🗑 Delete</button>'
+          +'</div>'
+        : '';
+      html += '<div class="dm-msg-bubble dm-wrap" style="display:flex;flex-direction:column;align-items:'+(isMine?'flex-end':'flex-start')+'" data-msgid="'+msg.id+'">'
+        +'<div id="dm-bubble-'+msg.id+'" style="max-width:72%;padding:'+(isFile?'10px':'10px 14px')+';border-radius:'
         +(isMine?'18px 4px 18px 18px':'4px 18px 18px 18px')
         +';background:'+(isMine?'var(--accent)':'var(--bg3)')
         +';color:'+(isMine?'#fff':'var(--text)')
@@ -1571,10 +1614,10 @@ var DM = (function(){
         +'</div>'
         +'<div style="font-size:10px;color:var(--text3);margin-top:3px;padding:0 4px;display:flex;align-items:center;gap:4px">'
         +timeStr
-        +(isMine ? (msg.is_read
-          ? ' <span style="color:var(--blue);font-size:11px" title="Read">✓✓</span>'
-          : ' <span style="color:var(--text3);font-size:11px" title="Sent">✓</span>') : '')
+        +(msg.edited_at&&!isDeleted?' <span style="opacity:.6">(edited)</span>':'')
+        +tickHtml
         +'</div>'
+        +actionsHtml
         +'</div>';
     });
 
@@ -1630,8 +1673,25 @@ var DM = (function(){
             unread[msg.sender_id] = (unread[msg.sender_id]||0) + 1;
             updateBadges();
             renderMembersList();
+            // Show popup notification
+            var senderMember = db.members.find(function(m){ return m.id===msg.sender_id; });
+            var senderName = senderMember ? senderMember.name : 'Someone';
+            if (typeof showDMPopup === 'function') showDMPopup(msg.sender_id, senderName, msg.content||'📎 File');
           }
-        }).subscribe();
+          // Also show popup if chat is open but user scrolled away or is on another view
+          if (msg.receiver_id===me && msg.sender_id===otherId && document.visibilityState==='hidden') {
+            var senderMember2 = db.members.find(function(m){ return m.id===msg.sender_id; });
+            var senderName2 = senderMember2 ? senderMember2.name : 'Someone';
+            if (typeof showDMPopup === 'function') showDMPopup(msg.sender_id, senderName2, msg.content||'📎 File');
+          }
+        })
+        // Also reload when a message is edited or deleted
+        .on('postgres_changes', {event:'UPDATE', schema:'public', table:'messages'}, function(payload) {
+          var msg = payload.new;
+          var isConv = (msg.sender_id===otherId && msg.receiver_id===me) || (msg.sender_id===me && msg.receiver_id===otherId);
+          if (isConv) loadMessages(otherId);
+        })
+        .subscribe();
     }).catch(function(){});
   }
 
@@ -1673,9 +1733,52 @@ var DM = (function(){
     }
   }
 
+  // ─── EDIT MESSAGE ────────────────────────────────────
+  async function editMsg(msgId) {
+    var bubble = document.getElementById('dm-bubble-'+msgId);
+    if (!bubble) return;
+    var original = bubble.innerText.trim();
+    bubble.innerHTML = '<textarea id="dm-edit-'+msgId+'" style="width:100%;background:transparent;border:none;outline:none;color:inherit;font:inherit;resize:none;min-height:36px;line-height:1.5" rows="2">'+esc(original)+'</textarea>'
+      +'<div style="display:flex;gap:6px;margin-top:6px">'
+      +'<button onclick="DM.saveEdit(\''+msgId+'\')" style="background:rgba(255,255,255,.2);border:none;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;color:inherit">Save</button>'
+      +'<button onclick="DM._loadMessages(DM.currentPeer&&DM.currentPeer.id)" style="background:rgba(255,255,255,.1);border:none;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;color:inherit">Cancel</button>'
+      +'</div>';
+    var ta = document.getElementById('dm-edit-'+msgId);
+    if (ta) { ta.focus(); ta.selectionStart = ta.value.length; ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px'; }
+  }
+
+  async function saveEdit(msgId) {
+    var ta = document.getElementById('dm-edit-'+msgId);
+    var newContent = ta && ta.value.trim();
+    if (!newContent) return;
+    try {
+      var supa = await getClient();
+      var upd = {content: newContent};
+      try { upd.edited_at = new Date().toISOString(); } catch(e) {}
+      await supa.from('messages').update(upd).eq('id', msgId).eq('sender_id', myId());
+      if (currentPeer) loadMessages(currentPeer.id);
+    } catch(e) { toast('Edit failed', 'error'); }
+  }
+
+  async function deleteMsg(msgId) {
+    if (!confirm('Delete this message?')) return;
+    try {
+      var supa = await getClient();
+      // Try soft delete first, fall back to hard delete
+      var res = await supa.from('messages').update({is_deleted: true}).eq('id', msgId).eq('sender_id', myId());
+      if (res.error) {
+        // Column may not exist — hard delete
+        await supa.from('messages').delete().eq('id', msgId).eq('sender_id', myId());
+      }
+      if (currentPeer) loadMessages(currentPeer.id);
+    } catch(e) { toast('Delete failed', 'error'); }
+  }
+
   // Public API (+ internals exposed for file sharing)
   return {
     init: init, openChat: openChat, send: send,
+    editMsg: editMsg, saveEdit: saveEdit, deleteMsg: deleteMsg,
+    renderList: renderMembersList,
     _getClient: getClient,
     _myId: myId,
     _loadMessages: loadMessages,
@@ -1685,6 +1788,33 @@ var DM = (function(){
 
 function initDM() { DM.init(); }
 function sendDM()  { DM.send(); }
+
+// ─── DM POPUP NOTIFICATION ──────────────────────────────
+function showDMPopup(senderId, senderName, content) {
+  // Browser notification
+  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    new Notification('💬 ' + senderName, {body: content.slice(0, 80), tag: 'dm_'+senderId, renotify: true});
+  }
+  // Remove existing popup from same sender
+  var old = document.getElementById('dm-popup-'+senderId);
+  if (old) old.remove();
+  // In-app popup
+  var member = db.members.find(function(m){ return m.id === senderId; });
+  var color = member ? member.color : 'var(--accent)';
+  var popup = document.createElement('div');
+  popup.id = 'dm-popup-'+senderId;
+  popup.className = 'dm-popup';
+  popup.onclick = function() { navigate('dm'); DM.openChat(senderId); popup.remove(); };
+  popup.innerHTML =
+    '<div style="width:36px;height:36px;border-radius:50%;background:'+color+';display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0">'+initials(senderName)+'</div>'
+    +'<div style="flex:1;min-width:0">'
+    +'<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">'+senderName+'</div>'
+    +'<div style="font-size:12px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+content.replace(/</g,'&lt;').replace(/>/g,'&gt;').slice(0,60)+'</div>'
+    +'</div>'
+    +'<span onclick="event.stopPropagation();this.closest(\'.dm-popup\').remove()" style="font-size:16px;color:var(--text3);padding:0 4px;flex-shrink:0">×</span>';
+  document.body.appendChild(popup);
+  setTimeout(function() { if (popup.parentNode) { popup.style.transition='opacity .3s'; popup.style.opacity='0'; setTimeout(function(){ popup.remove(); }, 300); } }, 5000);
+}
 </script>
 
 <script>
@@ -3052,6 +3182,16 @@ function updateAllPresenceDots(){
     const dot=document.getElementById('pdot-'+m.id);const lbl=document.getElementById('plbl-'+m.id);
     if(dot){const online=isOnline(m.id);dot.className='presence-dot '+(online?'online':'offline');if(lbl){lbl.textContent=online?'● Online':'○ Offline';lbl.style.color=online?'var(--green)':'var(--text3)';}}
   });
+  // Refresh DM member list online dots
+  if(typeof DM!=='undefined'&&DM.renderList)DM.renderList();
+  // Update DM chat header if a conversation is open
+  if(typeof DM!=='undefined'&&DM.currentPeer){
+    var peer=DM.currentPeer;var online=isOnline(peer.id);
+    var dot=document.querySelector('#dm-chat-title .dm-hdr-dot');
+    var lbl=document.querySelector('#dm-chat-title .dm-hdr-lbl');
+    if(dot)dot.style.background=online?'#2ecc8a':'#555';
+    if(lbl){lbl.textContent=online?'Online':'Offline';lbl.style.color=online?'var(--green)':'var(--text3)';}
+  }
 }
 
 // ═══ DATA ═══
@@ -4083,7 +4223,7 @@ function renderTeam(){
         </div>
       </div>
       <div class="tc-role">${m.role||'Team Member'}</div>
-      <div style="margin-bottom:8px"><span style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,0.06);color:${typeColors[m.type||'office']}">${typeLabels[m.type||'office']}</span></div>
+      <div style="margin-bottom:8px"><span style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,0.06);color:${typeColors[m.type]||typeColors.office}">${typeLabels[m.type]||'Office'}</span></div>
       ${m.phone?`<div style="font-size:12px;color:var(--text3);margin-bottom:2px">📱 ${m.phone}</div>`:''}
       ${m.email?`<div style="font-size:12px;color:var(--text3);margin-bottom:8px">✉️ ${m.email}</div>`:''}
       <div class="prog-wrap" style="margin-bottom:10px"><div class="prog-bar" style="width:${pct}%;background:${m.color}"></div></div>
