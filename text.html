@@ -3336,17 +3336,28 @@ async function initPresence(){
       onlineUserIds=new Set();
       Object.values(state).flat().forEach(function(u){
         if(u.memberId)onlineUserIds.add(u.memberId);
+        if(u.mId)onlineUserIds.add(u.mId);
         if(u.userId)onlineUserIds.add(u.userId);
-        // Name-based fallback: match by name (fuzzy) so users without memberId still show online
+        // Name-based fallback
         if(u.name){
           var matched=db.members.find(function(x){return _attNameMatch(x.name,u.name);});
           if(!matched)matched=db.members.find(function(x){return x.name&&_normAttName(x.name)===_normAttName(u.name);});
+          if(!matched&&u.name)matched=db.members.find(function(x){var xn=_normAttName(x.name),un=_normAttName(u.name);return xn&&un&&(xn.split(' ').some(function(w){return w.length>2&&un.includes(w);})||un.split(' ').some(function(w){return w.length>2&&xn.includes(w);}));});
           if(matched)onlineUserIds.add(matched.id);
         }
       });
       updateAllPresenceDots();
     }).subscribe(async(status)=>{
-      if(status==='SUBSCRIBED'){await presenceChannel.track({userId:currentUser.id,memberId:currentUser.memberId||null,name:currentUser.name||currentUser.username});}
+      if(status==='SUBSCRIBED'){
+        // Resolve local member ID on this device — most reliable approach
+        var _mId=currentUser.memberId||null;
+        if(!_mId&&currentUser.name){
+          var _nm=db.members.find(function(x){return _attNameMatch(x.name,currentUser.name);});
+          if(!_nm)_nm=db.members.find(function(x){return x.name&&_normAttName(x.name)===_normAttName(currentUser.name);});
+          if(_nm)_mId=_nm.id;
+        }
+        await presenceChannel.track({userId:currentUser.id,memberId:_mId,mId:_mId,name:currentUser.name||currentUser.username,username:currentUser.username||''});
+      }
     });
   }catch(e){}
 }
@@ -3356,6 +3367,9 @@ function updateAllPresenceDots(){
     const dot=document.getElementById('pdot-'+m.id);const lbl=document.getElementById('plbl-'+m.id);
     if(dot){const online=isOnline(m.id);dot.className='presence-dot '+(online?'online':'offline');if(lbl){lbl.textContent=online?'● Online':'○ Offline';lbl.style.color=online?'var(--green)':'var(--text3)';}}
   });
+  // Re-render team grid if Team page is visible (so new joinees appear without page refresh)
+  var teamView=document.getElementById('view-team');
+  if(teamView&&teamView.classList.contains('active')&&typeof renderTeam==='function')renderTeam();
   // Refresh DM member list online dots
   if(typeof DM!=='undefined'&&DM.renderList)DM.renderList();
   // Update DM chat header if a conversation is open
