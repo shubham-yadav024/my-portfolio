@@ -3101,7 +3101,24 @@ async function _loadAttFromSupa(date){
     var supa=await _getAttSupa();
     if(!supa)return null;
     var res=await supa.from('attendance').select('*').eq('date',date);
-    return(res&&res.data)?res.data:null;
+    if(!res||!res.data)return null;
+    // Deduplicate by member_name+date — same logic as history
+    var map={};
+    res.data.forEach(function(r){
+      var key=_normAttName(r.member_name||r.member_id||'');
+      if(!map[key]){
+        map[key]=Object.assign({},r);
+      }else{
+        var ex=map[key];
+        if(r.login_time&&ex.login_time&&new Date(r.login_time)<new Date(ex.login_time))ex.login_time=r.login_time;
+        if(!r.logout_time)ex.logout_time=null;
+        else if(ex.logout_time&&new Date(r.logout_time)>new Date(ex.logout_time))ex.logout_time=r.logout_time;
+        ex.total_hours=Math.max(parseFloat(ex.total_hours||0),parseFloat(r.total_hours||0));
+        if(!ex.member_id&&r.member_id)ex.member_id=r.member_id;
+        if(!r.logout_time)ex.session_start=r.session_start;
+      }
+    });
+    return Object.values(map);
   }catch(e){return null;}
 }
 
@@ -3113,7 +3130,28 @@ async function _loadAttHistoryFromSupa(from,to){
     if(from)q=q.gte('date',from);
     if(to)q=q.lte('date',to);
     var res=await q;
-    return(res&&res.data)?res.data:null;
+    if(!res||!res.data)return null;
+    var raw=res.data;
+    // Deduplicate: one record per (member_name, date) — keep earliest login, latest logout, max total_hours
+    var map={};
+    raw.forEach(function(r){
+      var key=_normAttName(r.member_name||r.member_id||'')+'__'+r.date;
+      if(!map[key]){
+        map[key]=Object.assign({},r);
+      }else{
+        var ex=map[key];
+        // Keep earliest login_time
+        if(r.login_time&&ex.login_time&&new Date(r.login_time)<new Date(ex.login_time))ex.login_time=r.login_time;
+        // Keep latest logout_time (null = still active, takes priority)
+        if(!r.logout_time)ex.logout_time=null;
+        else if(ex.logout_time&&new Date(r.logout_time)>new Date(ex.logout_time))ex.logout_time=r.logout_time;
+        // Max total_hours
+        ex.total_hours=Math.max(parseFloat(ex.total_hours||0),parseFloat(r.total_hours||0));
+        // Keep member_id that matches a known member (prefer non-null)
+        if(!ex.member_id&&r.member_id)ex.member_id=r.member_id;
+      }
+    });
+    return Object.values(map);
   }catch(e){return null;}
 }
 
