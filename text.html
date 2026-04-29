@@ -818,30 +818,58 @@ textarea.fctl{resize:vertical;min-height:65px;}
 <!-- CHAT -->
 <div class="view" id="view-chat">
   <div style="display:flex;flex-direction:column;height:calc(100vh - 120px)">
-    <h2 style="font-family:var(--font-head);font-size:18px;font-weight:700;margin-bottom:1rem">💬 Group Chat</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <h2 style="font-family:var(--font-head);font-size:18px;font-weight:700;margin:0">💬 Group Chat</h2>
+      <span id="gc-online-count" style="font-size:12px;color:var(--green);background:rgba(46,204,138,0.1);padding:3px 10px;border-radius:20px"></span>
+    </div>
     <div class="panel" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
-      <div id="chat-messages" style="flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:8px"></div>
-      <!-- File Preview Bar (Group Chat) -->
+      <div id="chat-messages" style="flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:4px"></div>
+      <!-- Typing indicator -->
+      <div id="gc-typing" style="display:none;padding:0 14px 4px;font-size:11px;color:var(--text3);font-style:italic"></div>
+      <!-- Reply bar -->
+      <div id="gc-reply-bar" style="display:none;padding:6px 12px;border-top:1px solid var(--border);background:var(--bg3);align-items:center;gap:8px">
+        <div style="flex:1;border-left:3px solid var(--accent);padding-left:8px">
+          <div id="gc-reply-name" style="font-size:11px;color:var(--accent);font-weight:600"></div>
+          <div id="gc-reply-text" style="font-size:12px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px"></div>
+        </div>
+        <button onclick="gcCancelReply()" style="background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer">✕</button>
+      </div>
+      <!-- File Preview Bar -->
       <div id="chat-file-preview" style="display:none;padding:8px 12px;border-top:1px solid var(--border);background:var(--bg3);align-items:center;gap:8px">
         <span id="chat-file-icon" style="font-size:20px">📄</span>
         <div style="flex:1;min-width:0">
           <div id="chat-file-name" style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
           <div id="chat-file-size" style="font-size:11px;color:var(--text3)"></div>
         </div>
-        <button onclick="clearChatFile()" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:2px 6px" title="Remove">✕</button>
+        <button onclick="clearChatFile()" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:2px 6px">✕</button>
       </div>
+      <!-- Input row -->
       <div style="padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center">
         <input type="file" id="chat-file-input" style="display:none" onchange="onChatFileSelect(this)"/>
-        <button onclick="document.getElementById('chat-file-input').click()"
-          style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:9px 11px;cursor:pointer;font-size:16px;flex-shrink:0;transition:background .15s;color:var(--text2)"
-          title="Attach file" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='var(--bg3)'">📎</button>
+        <button onclick="document.getElementById('chat-file-input').click()" style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:9px 11px;cursor:pointer;font-size:16px;flex-shrink:0;color:var(--text2)" title="Attach file">📎</button>
+        <button onclick="gcEmojiPick()" style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:9px 11px;cursor:pointer;font-size:16px;flex-shrink:0;color:var(--text2)" title="Emoji">😊</button>
         <input id="chat-input" type="text" placeholder="Type a message..."
           style="flex:1;padding:10px 14px;border-radius:22px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-size:14px;outline:none;transition:border-color .15s"
           onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border2)'"
+          oninput="gcTyping()"
           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMessage();}"/>
-        <button onclick="sendChatMessage()"
-          style="background:var(--accent);color:#fff;border:none;border-radius:22px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;white-space:nowrap;transition:background .15s"
-          onmouseover="this.style.background='var(--accent2)'" onmouseout="this.style.background='var(--accent)'">Send →</button>
+        <button onclick="sendChatMessage()" id="gc-send-btn"
+          style="background:var(--accent);color:#fff;border:none;border-radius:22px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;white-space:nowrap;transition:background .15s">Send →</button>
+      </div>
+      <!-- Emoji quick-pick row -->
+      <div id="gc-emoji-row" style="display:none;padding:6px 12px;border-top:1px solid var(--border);background:var(--bg3);gap:8px;flex-wrap:wrap">
+        <span onclick="gcInsertEmoji('👍')" style="cursor:pointer;font-size:20px">👍</span>
+        <span onclick="gcInsertEmoji('❤️')" style="cursor:pointer;font-size:20px">❤️</span>
+        <span onclick="gcInsertEmoji('😂')" style="cursor:pointer;font-size:20px">😂</span>
+        <span onclick="gcInsertEmoji('🙏')" style="cursor:pointer;font-size:20px">🙏</span>
+        <span onclick="gcInsertEmoji('👏')" style="cursor:pointer;font-size:20px">👏</span>
+        <span onclick="gcInsertEmoji('🔥')" style="cursor:pointer;font-size:20px">🔥</span>
+        <span onclick="gcInsertEmoji('✅')" style="cursor:pointer;font-size:20px">✅</span>
+        <span onclick="gcInsertEmoji('😊')" style="cursor:pointer;font-size:20px">😊</span>
+        <span onclick="gcInsertEmoji('😮')" style="cursor:pointer;font-size:20px">😮</span>
+        <span onclick="gcInsertEmoji('💪')" style="cursor:pointer;font-size:20px">💪</span>
+        <span onclick="gcInsertEmoji('📌')" style="cursor:pointer;font-size:20px">📌</span>
+        <span onclick="gcInsertEmoji('⚠️')" style="cursor:pointer;font-size:20px">⚠️</span>
       </div>
     </div>
   </div>
@@ -1957,15 +1985,21 @@ function clearChatFile() {
   if (inp) inp.value = '';
 }
 
-// Patch sendChatMessage to support files
-var _origSendChatMessage = typeof sendChatMessage === 'function' ? sendChatMessage : null;
 async function sendChatMessage() {
   var input   = document.getElementById('chat-input');
   var caption = input ? input.value.trim() : '';
   if (!_chatSelectedFile && !caption) return;
 
+  var supa = await _getGCSupa();
+  var senderName = (currentUser && currentUser.name) ? currentUser.name : 'You';
+  var senderId   = (currentUser && currentUser.id)   ? currentUser.id   : 'unknown';
+
+  // Collect reply info before clearing
+  var replyId   = _gcReplyTo ? _gcReplyTo.id   : null;
+  var replyName = _gcReplyTo ? _gcReplyTo.name : null;
+  var replyText = _gcReplyTo ? _gcReplyTo.text : null;
+
   if (_chatSelectedFile) {
-    // Show sending state
     if (input) input.disabled = true;
     toast('Uploading file...', 'success');
     try {
@@ -1973,14 +2007,11 @@ async function sendChatMessage() {
       var content = _buildFileMsg(url, _chatSelectedFile, caption);
       if (input) { input.value = ''; input.disabled = false; }
       clearChatFile();
-      // Send via API or local
-      try { await apiCall('POST', '/api/chat/general', { text: content }); }
-      catch(e) {
-        // Local fallback
-        chatMessages.push({ user_id: currentUser?.id, sender_name: currentUser?.name || 'You', text: content, created_at: new Date().toISOString() });
-        saveDB && saveDB();
+      gcCancelReply();
+      if (supa) {
+        var payload = JSON.stringify({ n: senderName, t: content, r: replyId, rn: replyName, rt: replyText });
+        await supa.from('messages').insert({ sender_id: senderId, receiver_id: 'group-general', content: payload, is_read: false });
       }
-      renderChatMessages();
       toast('File sent!', 'success');
     } catch(e) {
       if (input) input.disabled = false;
@@ -1991,11 +2022,19 @@ async function sendChatMessage() {
 
   // Normal text message
   if (input) input.value = '';
-  try {
-    await apiCall('POST', '/api/chat/general', { text: caption });
-    await loadChat();
-  } catch(e) {
-    chatMessages.push({ user_id: currentUser?.id, sender_name: currentUser?.name || 'You', text: caption, created_at: new Date().toISOString() });
+  gcCancelReply();
+  if (supa) {
+    try {
+      var payload = JSON.stringify({ n: senderName, t: caption, r: replyId, rn: replyName, rt: replyText });
+      await supa.from('messages').insert({ sender_id: senderId, receiver_id: 'group-general', content: payload, is_read: false });
+      // Realtime subscription handles UI update automatically
+    } catch(e) {
+      // Local fallback — show immediately without realtime
+      chatMessages.push({ id: Date.now(), sender_id: senderId, sender_name: senderName, content: JSON.stringify({ n: senderName, t: caption }), created_at: new Date().toISOString() });
+      renderChatMessages();
+    }
+  } else {
+    chatMessages.push({ id: Date.now(), sender_id: senderId, sender_name: senderName, content: JSON.stringify({ n: senderName, t: caption }), created_at: new Date().toISOString() });
     renderChatMessages();
   }
 }
@@ -2769,32 +2808,135 @@ function _updateSessionCard(){
   _updateActiveHoursDisplay();
 }
   let chatMessages=[];
+// ── Group Chat — Supabase realtime ──────────────────────
+var _gcSupa=null,_gcChannel=null,_gcReplyTo=null,_gcTypTimer=null,_gcOthersTyping={};
+var _GC_KEY='group-general';
+async function _getGCSupa(){
+  if(_gcSupa)return _gcSupa;
+  try{var m=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+  _gcSupa=m.createClient('https://msxqifrelaccpdvlohga.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zeHFpZnJlbGFjY3BkdmxvaGdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NDM4NDMsImV4cCI6MjA5MDUxOTg0M30.hmc3MbdPjTd8vUhw-n--IYld69a3yuDzu0rp4QvOiY0');}catch(e){}
+  return _gcSupa;
+}
+function _gcParse(m){
+  var d={id:m.id,sender_id:m.sender_id||m.user_id,sender_name:'Member',text:'',created_at:m.created_at,reply_to:null,reply_name:'',reply_text:''};
+  try{var j=JSON.parse(m.content||m.text||'{}');d.sender_name=j.n||j.sender_name||m.sender_name||'Member';d.text=j.t||j.text||'';d.reply_to=j.r||null;d.reply_name=j.rn||'';d.reply_text=j.rt||'';}
+  catch(e){d.text=m.content||m.text||'';}
+  return d;
+}
 async function loadChat(){
+  var con=document.getElementById('chat-messages');
+  if(con)con.innerHTML='<div style="text-align:center;color:var(--text3);padding:2rem;font-size:13px">Loading messages...</div>';
   try{
-    const res=await apiCall('GET','/api/chat/general');
-    if(res&&res.messages){
-      chatMessages=res.messages;
-      renderChatMessages();
+    var supa=await _getGCSupa();if(!supa)throw new Error('no supa');
+    var res=await supa.from('messages').select('*').eq('receiver_id',_GC_KEY).order('created_at',{ascending:true}).limit(200);
+    if(res&&res.data){chatMessages=res.data;renderChatMessages();}
+    // Realtime subscription
+    if(!_gcChannel){
+      _gcChannel=supa.channel('gc-room',{config:{presence:{key:currentUser?.id||'anon'}}});
+      _gcChannel
+        .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:'receiver_id=eq.'+_GC_KEY},function(p){
+          if(!chatMessages.find(function(m){return m.id===p.new.id;}))chatMessages.push(p.new);
+          renderChatMessages();
+          var d=_gcParse(p.new);
+          if(d.sender_id!==currentUser?.id&&!document.getElementById('view-chat').classList.contains('active')){
+            if(typeof showDMPopup==='function')showDMPopup(d.sender_id,d.sender_name,'[Group] '+d.text.slice(0,60));
+          }
+          // Clear that person's typing indicator
+          delete _gcOthersTyping[d.sender_id];_gcShowTyping();
+        })
+        .on('broadcast',{event:'typing'},function(p){
+          if(p.payload&&p.payload.id&&p.payload.id!==currentUser?.id){
+            _gcOthersTyping[p.payload.id]=p.payload.name;
+            clearTimeout(_gcOthersTyping['_t_'+p.payload.id]);
+            _gcOthersTyping['_t_'+p.payload.id]=setTimeout(function(){delete _gcOthersTyping[p.payload.id];_gcShowTyping();},3000);
+            _gcShowTyping();
+          }
+        })
+        .on('presence',{event:'sync'},function(){
+          var state=_gcChannel.presenceState();
+          var cnt=Object.values(state).flat().length;
+          var el=document.getElementById('gc-online-count');
+          if(el)el.textContent=cnt>0?'🟢 '+cnt+' online':'';
+        })
+        .subscribe(async function(status){
+          if(status==='SUBSCRIBED'&&currentUser){
+            await _gcChannel.track({id:currentUser.id,name:currentUser.name||currentUser.username});
+          }
+        });
     }
-  }catch(e){}
+  }catch(e){
+    // Backend fallback
+    try{var r=await apiCall('GET','/api/chat/general');if(r&&r.messages){chatMessages=r.messages;renderChatMessages();}}catch(e2){
+      if(con)con.innerHTML='<div style="text-align:center;color:var(--text3);padding:2rem">Could not load messages. Check connection.</div>';
+    }
+  }
+}
+function _gcShowTyping(){
+  var names=Object.keys(_gcOthersTyping).filter(function(k){return !k.startsWith('_t_');}).map(function(k){return _gcOthersTyping[k];});
+  var el=document.getElementById('gc-typing');
+  if(!el)return;
+  if(names.length){el.style.display='block';el.textContent=names.join(', ')+(names.length===1?' is typing..':' are typing...');}
+  else{el.style.display='none';}
+}
+function gcTyping(){
+  if(!_gcChannel||!currentUser)return;
+  clearTimeout(_gcTypTimer);
+  _gcChannel.send({type:'broadcast',event:'typing',payload:{id:currentUser.id,name:currentUser.name||currentUser.username}});
+  _gcTypTimer=setTimeout(function(){},2500);
+}
+function gcReply(id,name,text){
+  _gcReplyTo={id:id,name:name,text:text};
+  var bar=document.getElementById('gc-reply-bar');if(bar)bar.style.display='flex';
+  document.getElementById('gc-reply-name').textContent=name;
+  document.getElementById('gc-reply-text').textContent=text.slice(0,80);
+  document.getElementById('chat-input').focus();
+}
+function gcCancelReply(){
+  _gcReplyTo=null;
+  var bar=document.getElementById('gc-reply-bar');if(bar)bar.style.display='none';
+}
+function gcEmojiPick(){
+  var r=document.getElementById('gc-emoji-row');
+  if(r)r.style.display=r.style.display==='none'?'flex':'none';
+}
+function gcInsertEmoji(e){
+  var inp=document.getElementById('chat-input');
+  if(inp){inp.value+=e;inp.focus();}
+  var r=document.getElementById('gc-emoji-row');if(r)r.style.display='none';
 }
 function renderChatMessages(){
-  const container=document.getElementById('chat-messages');
-  if(!container)return;
-  container.innerHTML=chatMessages.length?chatMessages.map(m=>{
-    const isMe=m.user_id===currentUser?.id;
-    const time=new Date(m.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
-    const text=m.text||m.content||'';
-    const isFile=text.includes('__FILE__:');
-    const bubbleContent=isFile
-      ? (_renderFileContent(text)||text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'))
-      : text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    return`<div style="display:flex;flex-direction:column;align-items:${isMe?'flex-end':'flex-start'}">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:2px">${isMe?'You':m.sender_name||'Member'} • ${time}</div>
-      <div style="max-width:72%;padding:${isFile?'10px':'8px 14px'};border-radius:${isMe?'16px 16px 4px 16px':'16px 16px 16px 4px'};background:${isMe?'var(--accent)':'var(--bg3)'};color:${isMe?'#fff':'var(--text)'};font-size:14px;line-height:1.5">${bubbleContent}</div>
-    </div>`;
-  }).join(''):'<div style="text-align:center;color:var(--text3);padding:2rem">No messages yet. Say hello! 👋</div>';
-  container.scrollTop=container.scrollHeight;
+  var con=document.getElementById('chat-messages');if(!con)return;
+  var msgs=chatMessages||[];
+  if(!msgs.length){con.innerHTML='<div style="text-align:center;color:var(--text3);padding:3rem;font-size:14px">No messages yet. Say hello! 👋</div>';return;}
+  var lastDate='';var wasScrolledBottom=con.scrollTop+con.clientHeight>=con.scrollHeight-40;
+  con.innerHTML=msgs.map(function(m){
+    var d=_gcParse(m);
+    var isMe=d.sender_id===currentUser?.id;
+    var cm=getMember?getMember(d.sender_id):{name:d.sender_name,color:'#555'};
+    var mc=cm.color||'#555';
+    var time=new Date(d.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+    var dateStr=new Date(d.created_at).toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
+    var sep='';
+    if(dateStr!==lastDate){lastDate=dateStr;sep='<div style="text-align:center;margin:10px 0 6px"><span style="font-size:11px;color:var(--text3);background:var(--bg2);padding:2px 12px;border-radius:10px;border:1px solid var(--border)">'+dateStr+'</span></div>';}
+    var replyHtml='';
+    if(d.reply_text){replyHtml='<div style="border-left:2px solid '+(isMe?'rgba(255,255,255,0.5)':'var(--accent)')+';padding:3px 8px;margin-bottom:5px;border-radius:0 4px 4px 0;background:rgba(0,0,0,0.12);font-size:11px;color:'+(isMe?'rgba(255,255,255,0.75)':'var(--text3)')+'"><div style="font-weight:700;margin-bottom:1px">'+esc(d.reply_name)+'</div><div style="opacity:.85">'+esc(d.reply_text.slice(0,70))+(d.reply_text.length>70?'…':'')+'</div></div>';}
+    var isFile=d.text.includes('__FILE__:');
+    var bubble=isFile?(_renderFileContent?(_renderFileContent(d.text)||esc(d.text)):esc(d.text)):esc(d.text);
+    var safeText=d.text.replace(/'/g,'&apos;').slice(0,80);var safeName=d.sender_name.replace(/'/g,'&apos;');
+    return sep+'<div style="display:flex;flex-direction:column;align-items:'+(isMe?'flex-end':'flex-start')+';margin-bottom:6px">'+
+      '<div style="display:flex;align-items:flex-end;gap:6px;flex-direction:'+(isMe?'row-reverse':'row')+'">'+
+        (isMe?'':'<div style="width:30px;height:30px;border-radius:50%;background:'+mc+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">'+initials(d.sender_name)+'</div>')+
+        '<div style="max-width:min(340px,72vw)">'+
+          '<div style="font-size:11px;color:var(--text3);margin-bottom:3px;'+(isMe?'text-align:right':'')+'">'+esc(isMe?'You':d.sender_name)+' · '+time+'</div>'+
+          '<div style="padding:'+(isFile?'10px':'9px 14px')+';border-radius:'+(isMe?'16px 16px 4px 16px':'16px 16px 16px 4px')+';background:'+(isMe?'var(--accent)':'var(--bg3)')+';color:'+(isMe?'#fff':'var(--text)')+';font-size:14px;line-height:1.5;word-break:break-word">'+replyHtml+bubble+'</div>'+
+          '<div style="margin-top:3px;display:flex;gap:4px;'+(isMe?'justify-content:flex-end':'')+'">'+
+            '<span onclick="gcReply(\''+m.id+'\',\''+safeName+'\',\''+safeText+'\')" style="cursor:pointer;font-size:10px;color:var(--text3);padding:2px 7px;border-radius:8px;border:1px solid var(--border2);user-select:none" title="Reply">↩ Reply</span>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+  if(wasScrolledBottom)con.scrollTop=con.scrollHeight;
 }
 // sendChatMessage is defined in file-sharing script block above
 // ── Employee Attendance Detail ──────────────────────────
