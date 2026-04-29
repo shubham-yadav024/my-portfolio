@@ -2594,12 +2594,17 @@ async function _attSyncToSupa(memberId,today,loginTime,currentSessStart,memberNa
     var supa=await _getAttSupa();
     if(!supa)return;
     if(!memberName)memberName=(currentUser&&(currentUser.name||currentUser.username))||'';
-    // Robust lookup: try member_id → ilike name → normalized name scan
+    // Robust lookup: member_id first (use limit(1) to handle duplicates gracefully), then name scan
     var ex=null;
-    if(memberId){ex=await supa.from('attendance').select('id,total_hours,login_time').eq('member_id',memberId).eq('date',today).maybeSingle();}
-    if((!ex||!ex.data)&&memberName){ex=await supa.from('attendance').select('id,total_hours,login_time').eq('date',today).ilike('member_name',memberName.trim()).maybeSingle();}
-    if((!ex||!ex.data)&&memberName){
-      // Fetch all today's records and match by normalized name
+    if(memberId){
+      var _r1=await supa.from('attendance').select('id,total_hours,login_time').eq('member_id',memberId).eq('date',today).order('login_time',{ascending:true}).limit(1);
+      if(_r1&&_r1.data&&_r1.data.length>0)ex={data:_r1.data[0]};
+    }
+    if(!ex&&memberName){
+      var _r2=await supa.from('attendance').select('id,total_hours,login_time').eq('date',today).ilike('member_name',memberName.trim()).order('login_time',{ascending:true}).limit(1);
+      if(_r2&&_r2.data&&_r2.data.length>0)ex={data:_r2.data[0]};
+    }
+    if(!ex&&memberName){
       var all=await supa.from('attendance').select('id,total_hours,login_time,member_name').eq('date',today);
       if(all&&all.data){var _nm=_normAttName(memberName);var _match=all.data.find(function(r){return _normAttName(r.member_name)===_nm;});if(_match)ex={data:_match};}
     }
@@ -2611,11 +2616,14 @@ async function _attSyncToSupa(memberId,today,loginTime,currentSessStart,memberNa
       if(supaTotal>localTotal)localStorage.setItem(totalKey,supaTotal.toFixed(4));
       _attPrevHours=parseFloat(localStorage.getItem(totalKey)||0);
       var sessStart=currentSessStart||loginTime;
-      // Preserve original login_time (first login of day), only update session_start
-      supa.from('attendance').update({logout_time:null,session_start:sessStart,member_id:memberId,member_name:memberName}).eq('id',ex.data.id).then(function(){}).catch(function(){});
+      // Preserve original login_time; fix member_name if it was empty; update session_start for re-login
+      var upd={logout_time:null,session_start:sessStart,member_id:memberId};
+      if(memberName)upd.member_name=memberName;
+      supa.from('attendance').update(upd).eq('id',ex.data.id).then(function(){}).catch(function(){});
       return;
     }
-    // No record found — insert (unique index on member_name+date prevents duplicates at DB level)
+    // Only insert if we have a valid name — prevents ghost empty-name records
+    if(!memberName)return;
     var res=await supa.from('attendance').insert({
       member_id:memberId,
       member_name:memberName,
@@ -2733,15 +2741,14 @@ function _updateActiveHoursDisplay(){
   var sb=document.getElementById('my-hours-badge');
   if(sb){sb.textContent=str;sb.style.display='inline';}
   // Update live hours for ALL active users in the attendance panel
-  // Uses prevHours (accumulated from completed sessions) + current session duration
+  // prevHours (completed sessions) + current session duration
   document.querySelectorAll('.live-att-hours[data-sess-start]').forEach(function(span){
     var sessStart=span.getAttribute('data-sess-start');
-    // Wall clock: now - first login of day (includes breaks)
-    var firstLogin=span.getAttribute('data-first-login')||sessStart;
-    if(!firstLogin)return;
-    var ms=Date.now()-new Date(firstLogin).getTime();
-    if(ms<0)return;
-    var totalH=ms/3600000;
+    if(!sessStart)return;
+    var prevHours=parseFloat(span.getAttribute('data-prev-hours')||0);
+    var ms=Date.now()-new Date(sessStart).getTime();
+    if(ms<0)ms=0;
+    var totalH=prevHours+(ms/3600000);
     var h=Math.floor(totalH);
     var m=Math.floor((totalH%1)*60);
     span.textContent=(h>0?h+'h ':'')+m+'m';
