@@ -2510,24 +2510,28 @@ async function _attSyncToSupa(memberId,today,loginTime,currentSessStart,memberNa
     var supa=await _getAttSupa();
     if(!supa)return;
     if(!memberName)memberName=(currentUser&&(currentUser.name||currentUser.username))||'';
-    // Try finding by member_id first, then by member_name (handles legacy/mismatched IDs)
-    var ex=await supa.from('attendance').select('id,total_hours').eq('member_id',memberId).eq('date',today).maybeSingle();
+    // Robust lookup: try member_id → ilike name → normalized name scan
+    var ex=null;
+    if(memberId){ex=await supa.from('attendance').select('id,total_hours,login_time').eq('member_id',memberId).eq('date',today).maybeSingle();}
+    if((!ex||!ex.data)&&memberName){ex=await supa.from('attendance').select('id,total_hours,login_time').eq('date',today).ilike('member_name',memberName.trim()).maybeSingle();}
     if((!ex||!ex.data)&&memberName){
-      ex=await supa.from('attendance').select('id,total_hours').eq('date',today).ilike('member_name',memberName).maybeSingle();
+      // Fetch all today's records and match by normalized name
+      var all=await supa.from('attendance').select('id,total_hours,login_time,member_name').eq('date',today);
+      if(all&&all.data){var _nm=_normAttName(memberName);var _match=all.data.find(function(r){return _normAttName(r.member_name)===_nm;});if(_match)ex={data:_match};}
     }
     if(ex&&ex.data){
       localStorage.setItem('att_supa_id',ex.data.id);
-      // Sync total_hours from Supabase → localStorage so multi-device sessions accumulate correctly
       var supaTotal=parseFloat(ex.data.total_hours||0);
       var totalKey='att_total_'+memberId+'_'+today;
       var localTotal=parseFloat(localStorage.getItem(totalKey)||0);
       if(supaTotal>localTotal)localStorage.setItem(totalKey,supaTotal.toFixed(4));
       _attPrevHours=parseFloat(localStorage.getItem(totalKey)||0);
-      // New session — clear logout_time, update session_start, fix member_id if needed
       var sessStart=currentSessStart||loginTime;
+      // Preserve original login_time (first login of day), only update session_start
       supa.from('attendance').update({logout_time:null,session_start:sessStart,member_id:memberId,member_name:memberName}).eq('id',ex.data.id).then(function(){}).catch(function(){});
       return;
     }
+    // No record found — insert (unique index on member_name+date prevents duplicates at DB level)
     var res=await supa.from('attendance').insert({
       member_id:memberId,
       member_name:memberName,
