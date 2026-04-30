@@ -3394,10 +3394,29 @@ async function _attPanelRefreshTick(){
   });
 }
 
+// Auto-close unclosed sessions from past days at 6:15 PM
+async function _autoCloseStaleAttSessions(supa,date){
+  try{
+    var stale=await supa.from('attendance').select('id,login_time,session_start,total_hours').eq('date',date).is('logout_time',null);
+    if(!stale||!stale.data||!stale.data.length)return;
+    var logoutISO=date+'T12:45:00.000+00:00'; // 6:15 PM IST
+    var logoutDT=new Date(logoutISO);
+    stale.data.forEach(function(r){
+      var sessDT=r.session_start?new Date(r.session_start):new Date(r.login_time);
+      var prev=parseFloat(r.total_hours||0);
+      var curr=Math.max(0,(logoutDT-sessDT)/3600000);
+      var total=Math.round((prev+curr)*100)/100;
+      supa.from('attendance').update({logout_time:logoutISO,total_hours:total,session_start:null}).eq('id',r.id).then(function(){}).catch(function(){});
+    });
+  }catch(e){}
+}
 async function _loadAttFromSupa(date){
   try{
     var supa=await _getAttSupa();
     if(!supa)return null;
+    // If viewing a past day, auto-close any sessions that never logged out
+    var today=new Date().toISOString().slice(0,10);
+    if(date<today)_autoCloseStaleAttSessions(supa,date);
     var res=await supa.from('attendance').select('*').eq('date',date);
     if(!res||!res.data)return null;
     // Deduplicate by member_name+date — same logic as history
