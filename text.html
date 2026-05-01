@@ -2330,7 +2330,7 @@ var paRP={
       // Check logged-out record
       var rec=allRecs.find(function(r){return r.member_id===m.id||(window._attNameMatch&&window._attNameMatch(r.member_name,m.name));});
       if(rec&&rec.login_time){
-        var logoutTime=rec.logout_time?new Date(rec.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
+        var logoutTime=_fmtLogout(rec.logout_time);
         var hrs2=parseFloat(rec.total_hours||0);var h2=Math.floor(hrs2);var mn2=Math.round((hrs2%1)*60);
         return{l:m.name,v:'🔵 Out: '+logoutTime+' · '+h2+'h '+mn2+'m',s:'po'};
       }
@@ -2501,6 +2501,7 @@ var _attPanelTimer=null;
 var _attLastSupaData=null;
 
 function _normAttName(s){return(s||'').toLowerCase().replace(/\b(mr|mrs|ms|dr|prof)\b\.?/gi,'').replace(/[.\-_]/g,' ').replace(/\s+/g,' ').trim();}
+function _fmtLogout(t){if(!t)return'—';var d=new Date(t);if(d.getUTCHours()===12&&d.getUTCMinutes()===45)return'—';return d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});}
 function _attNameMatch(a,b){var na=_normAttName(a),nb=_normAttName(b);if(!na||!nb)return false;if(na===nb||na.includes(nb)||nb.includes(na))return true;var wa=na.split(' ').filter(function(w){return w.length>3;});var wb=nb.split(' ').filter(function(w){return w.length>3;});return wa.some(function(w){return wb.includes(w);});}
 window._getAttSupa=async function _getAttSupa(){
   if(_attSupaClient)return _attSupaClient;
@@ -3001,7 +3002,7 @@ function _renderEmpAttModal(){
   document.getElementById('emp-att-modal-list').innerHTML=rows.map(function(r){
     var dateStr=new Date(r.date+'T12:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
     var loginT=r.login_time?new Date(r.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
-    var logoutT=r.logout_time?new Date(r.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):(r.session_start?'<span style="color:var(--green);font-weight:600">Active</span>':'—');
+    var logoutT=r.logout_time?(_fmtLogout(r.logout_time)==='—'?'—':_fmtLogout(r.logout_time)):(r.session_start?'<span style="color:var(--green);font-weight:600">Active</span>':'—');
     var hrs=parseFloat(r.total_hours||0);
     var hStr=Math.floor(hrs)+'h '+Math.round((hrs%1)*60)+'m';
     var hColor=hrs>6?'var(--green)':hrs>3?'var(--amber)':'var(--text2)';
@@ -3022,7 +3023,7 @@ function downloadEmpAtt(){
     var dateStr=d.toLocaleDateString('en-IN',{day:'2-digit',month:'2-digit',year:'numeric'});
     var dayStr=d.toLocaleDateString('en-IN',{weekday:'long'});
     var loginT=r.login_time?new Date(r.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
-    var logoutT=r.logout_time?new Date(r.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
+    var logoutT=_fmtLogout(r.logout_time);
     var hrs=parseFloat(r.total_hours||0);
     var hStr=Math.floor(hrs)+'h '+Math.round((hrs%1)*60)+'m';
     lines.push([(i+1),'"'+dateStr+'"','"'+dayStr+'"','"'+loginT+'"','"'+logoutT+'"','"'+hStr+'"'].join(','));
@@ -3065,7 +3066,7 @@ async function exportAttendanceExcel(){
       })||{name:r.member_name||r.member_id||'—',role:'—'};
       const date=new Date(r.date+'T12:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
       const loginT=r.login_time?new Date(r.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
-      const logoutT=r.logout_time?new Date(r.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'Active';
+      const logoutT=r.logout_time?(_fmtLogout(r.logout_time)||'Active'):'Active';
       const hrs=parseFloat(r.total_hours||0);
       const hDisplay=Math.floor(hrs)+'h '+(Math.round((hrs%1)*60))+'m';
       const status=r.status==='present'?'Present':'Absent';
@@ -3177,7 +3178,7 @@ async function loadAttendance(){
       const isActive=s.isActive!==undefined?s.isActive:(isPresent&&!s.logout_time);
       const isLoggedOut=isPresent&&!isActive;
       const loginTime=s.login_time?new Date(s.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
-      const logoutTime=s.logout_time?new Date(s.logout_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):(isActive?'<span style="color:var(--green);font-weight:600">Active</span>':'—');
+      const logoutTime=s.logout_time?(_fmtLogout(s.logout_time)||'<span style="color:var(--green);font-weight:600">Active</span>'):(isActive?'<span style="color:var(--green);font-weight:600">Active</span>':'—');
       const hours=parseFloat(s.today_hours||0).toFixed(1);
       const hoursColor=parseFloat(hours)>6?'var(--green)':parseFloat(hours)>3?'var(--amber)':'var(--text2)';
       const badgeStyle=isActive?'background:var(--green-bg);color:var(--green)':isLoggedOut?'background:var(--blue-bg);color:var(--blue)':'background:var(--red-bg);color:var(--red)';
