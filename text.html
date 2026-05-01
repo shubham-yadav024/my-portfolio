@@ -2698,7 +2698,6 @@ function _checkAutoLogout(){
   var now=new Date();
   var h=now.getHours(),m=now.getMinutes();
   if(h>18||(h===18&&m>=15)){
-    attendanceLogout();
     // Clear app session so next day requires fresh login
     localStorage.removeItem('taskflow_token');
     localStorage.removeItem('taskflow_user');
@@ -3326,21 +3325,6 @@ async function _attPanelRefreshTick(){
   var supaData=res.data.filter(function(r){
     return !_adminSkip.some(function(n){return(r.member_name||'').toLowerCase().includes(n);});
   });
-  // Auto-logout past 6:15 PM — update Supabase once per record per session
-  var pastAutoLogout=now.getHours()>18||(now.getHours()===18&&now.getMinutes()>=15);
-  if(pastAutoLogout){
-    supaData.forEach(function(rec){
-      if(!rec.logout_time&&rec.id&&!_attAutoLogoutDone.has(rec.id)){
-        _attAutoLogoutDone.add(rec.id);
-        var autoTime=new Date(today+'T18:15:00');
-        var activeSess=rec.session_start||rec.login_time;
-        var addedHrs=activeSess?Math.max(0,(autoTime-new Date(activeSess))/3600000):0;
-        var newTotal=parseFloat(((rec.total_hours||0)+addedHrs).toFixed(2));
-        supa.from('attendance').update({logout_time:autoTime.toISOString(),total_hours:newTotal,session_start:null}).eq('id',rec.id).then(function(){}).catch(function(){});
-        rec.logout_time=autoTime.toISOString();rec.total_hours=newTotal;rec.session_start=null;
-      }
-    });
-  }
   // Merge with members list (exclude admins/reviewers)
   var merged=db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer'&&!['ashish yadav','pravin bidaye'].some(function(n){return(m.name||'').toLowerCase().includes(n);});}).map(function(m){
     var rec=supaData.find(function(r){return r.member_id===m.id||_attNameMatch(r.member_name,m.name);});
