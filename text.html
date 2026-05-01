@@ -3156,9 +3156,16 @@ async function loadAttendance(){
   }
 
   function _renderSummary(summary){
-    // Dedup by member name — one row per employee regardless of db.members duplicates
-    var _seenSumNames=[];
-    summary=summary.filter(function(s){var n=(s.member&&s.member.name)||'';if(_seenSumNames.some(function(x){return _attNameMatch(x,n);}))return false;_seenSumNames.push(n);return true;});
+    // Dedup by member.id (primary) + name fuzzy match (fallback) — one row per employee
+    var _seenSumIds=new Set();var _seenSumNames=[];
+    summary=summary.filter(function(s){
+      var id=s.member&&s.member.id;
+      if(id){if(_seenSumIds.has(id))return false;_seenSumIds.add(id);}
+      var n=(s.member&&s.member.name)||'';
+      if(n&&_seenSumNames.some(function(x){return _attNameMatch(x,n);}))return false;
+      if(n)_seenSumNames.push(n);
+      return true;
+    });
     // Sync online status with attendance Active state — same source of truth
     var _actSet=new Set();
     summary.forEach(function(s){if((s.isActive||(s.today_status==='present'&&!s.logout_time&&s.login_time))&&!_isMemberAdmin(s.member))_actSet.add(s.member.id);});
@@ -3276,9 +3283,11 @@ async function loadAttendance(){
       }
 
       // Render rows
+      var _histSeen=new Set();
       histList.innerHTML=rows.map(function(r){
-        const member=db.members.find(function(m){return m.id===r.member_id||_attNameMatch(m.name,r.member_name);});
+        const member=db.members.find(function(m){return m.id===(r._canon_id||r.member_id)||m.id===r.member_id||_attNameMatch(m.name,r.member_name||'');});
         if(!member||member.role==='admin'||member.role==='reviewer'||_isMemberAdmin(member))return''; // skip admins
+        var rowKey=r.date+'__'+member.id;if(_histSeen.has(rowKey))return'';_histSeen.add(rowKey); // safety dedup
         const loginT=r.login_time?new Date(r.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
         const logoutFmt=_fmtLogout(r.logout_time);
         const logoutT=r.logout_time?(logoutFmt||'<span style="color:var(--green);font-weight:600">Active</span>'):'<span style="color:var(--green);font-weight:600">Active</span>';
@@ -3452,32 +3461,35 @@ async function _loadAttHistoryFromSupa(from,to){
     var res=await q;
     if(!res||!res.data)return null;
     var raw=res.data;
-    // Group by (date, member) using fuzzy name matching — one row per employee per day, summed hours
-    var groups=[];
+    // Group by (date, canonical db.members ID) — most reliable, handles null/different names
+    var groups={};
     raw.forEach(function(r){
+      var mem=db.members.find(function(m){return(r.member_id&&m.id===r.member_id)||_attNameMatch(m.name,r.member_name||'');});
+      var canonId=mem?mem.id:(r.member_id||('_name_'+_normAttName(r.member_name||'')));
+      var key=r.date+'__'+canonId;
       // Hours for this individual record — compute from timestamps if total_hours missing
       var recHours=parseFloat(r.total_hours||0);
-      if(!recHours&&r.login_time&&r.logout_time){
-        recHours=Math.max(0,(new Date(r.logout_time)-new Date(r.login_time))/3600000);
-      }
-      var grp=groups.find(function(g){return g.date===r.date&&_attNameMatch(g.member_name||'',r.member_name||'');});
-      if(!grp){
-        var copy=Object.assign({},r);copy.total_hours=recHours;groups.push(copy);
+      if(!recHours&&r.login_time&&r.logout_time){recHours=Math.max(0,(new Date(r.logout_time)-new Date(r.login_time))/3600000);}
+      if(!groups[key]){
+        groups[key]=Object.assign({},r,{total_hours:recHours,_canon_id:canonId});
       }else{
-        if(r.login_time&&grp.login_time&&new Date(r.login_time)<new Date(grp.login_time))grp.login_time=r.login_time;
-        if(!r.logout_time)grp.logout_time=null;
-        else if(grp.logout_time&&new Date(r.logout_time)>new Date(grp.logout_time))grp.logout_time=r.logout_time;
-        grp.total_hours=parseFloat(grp.total_hours||0)+recHours;
-        if(!grp.member_id&&r.member_id)grp.member_id=r.member_id;
+        var g=groups[key];
+        if(r.login_time&&g.login_time&&new Date(r.login_time)<new Date(g.login_time))g.login_time=r.login_time;
+        if(!r.logout_time)g.logout_time=null;
+        else if(g.logout_time&&new Date(r.logout_time)>new Date(g.logout_time))g.logout_time=r.logout_time;
+        g.total_hours=parseFloat(g.total_hours||0)+recHours;
+        if(!g.member_id&&r.member_id)g.member_id=r.member_id;
+        if(!g.member_name&&r.member_name)g.member_name=r.member_name;
       }
     });
+    var result=Object.values(groups);
     // Final pass: if hours still 0 but login+logout exist, compute from timestamps
-    groups.forEach(function(r){
+    result.forEach(function(r){
       if(!parseFloat(r.total_hours||0)&&r.login_time&&r.logout_time){
         r.total_hours=Math.max(0,(new Date(r.logout_time)-new Date(r.login_time))/3600000);
       }
     });
-    return groups;
+    return result;
   }catch(e){return null;}
 }
 
