@@ -2575,6 +2575,7 @@ async function attendanceLogin(memberId){
   if(!localStorage.getItem(_sFirst))localStorage.setItem(_sFirst,localStorage.getItem(firstLoginKey)||now);
   var _stablePrev=parseFloat(localStorage.getItem(_sTotal)||0);
   _attPrevHours=Math.max(parseFloat(localStorage.getItem(totalKey)||0),_stablePrev);
+  _attAutoSaved=false; // reset so auto-save can fire for this new session
   _attLoginTime=new Date(now);
   _startAttTimer();_updateSessionCard();
   if(document.getElementById('view-attendance')&&document.getElementById('view-attendance').style.display!=='none')setTimeout(loadAttendance,100);
@@ -2691,13 +2692,32 @@ async function attendanceLogout(){
   if(document.getElementById('view-attendance')&&document.getElementById('view-attendance').style.display!=='none')loadAttendance();
 }
 
-// ── Auto logout at 6:15 PM ──
+// ── Auto-save attendance at 8:49 PM, record logout as 6:19 PM IST ──
+var _attAutoSaved=false;
 function _checkAutoLogout(){
   if(!_attLoginTime)return;
   if(new Date().getDay()===0)return; // Sunday = holiday
   var now=new Date();
   var h=now.getHours(),m=now.getMinutes();
-  if(h>18||(h===18&&m>=15)){
+  if(h>20||(h===20&&m>=49)){
+    if(_attAutoSaved)return;
+    _attAutoSaved=true;
+    // Save 6:19 PM IST as logout_time to Supabase (silently)
+    var today=now.toISOString().slice(0,10);
+    var logoutISO=today+'T12:49:00.000+00:00'; // 6:19 PM IST = 12:49 UTC
+    var logoutDT=new Date(logoutISO);
+    var memberId=localStorage.getItem('att_member_id');
+    var supaId=localStorage.getItem('att_supa_id');
+    var _uid=currentUser&&currentUser.id||memberId;
+    var firstStr=localStorage.getItem('att_s_'+_uid+'_first_'+today)||localStorage.getItem('att_login_'+memberId+'_'+today)||localStorage.getItem('att_login_time');
+    var totalHours=firstStr?Math.max(0,(logoutDT-new Date(firstStr))/3600000):0;
+    _getAttSupa().then(function(supa){
+      if(!supa)return;
+      var upd={logout_time:logoutISO,total_hours:parseFloat(totalHours.toFixed(2)),session_start:null};
+      if(supaId){supa.from('attendance').update(upd).eq('id',supaId).then(function(){}).catch(function(){});}
+      else if(memberId){supa.from('attendance').update(upd).eq('member_id',memberId).eq('date',today).then(function(){}).catch(function(){});}
+    });
+    _attLoginTime=null; // stop timer firing again
     // Clear app session so next day requires fresh login
     localStorage.removeItem('taskflow_token');
     localStorage.removeItem('taskflow_user');
