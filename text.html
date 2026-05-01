@@ -3156,6 +3156,9 @@ async function loadAttendance(){
   }
 
   function _renderSummary(summary){
+    // Dedup by member name — one row per employee regardless of db.members duplicates
+    var _seenSumNames=[];
+    summary=summary.filter(function(s){var n=(s.member&&s.member.name)||'';if(_seenSumNames.some(function(x){return _attNameMatch(x,n);}))return false;_seenSumNames.push(n);return true;});
     // Sync online status with attendance Active state — same source of truth
     var _actSet=new Set();
     summary.forEach(function(s){if((s.isActive||(s.today_status==='present'&&!s.logout_time&&s.login_time))&&!_isMemberAdmin(s.member))_actSet.add(s.member.id);});
@@ -3216,21 +3219,23 @@ async function loadAttendance(){
   _loadAttFromSupa(today).then(function(supaData){
     if(supaData&&supaData.length>0){
       var merged=db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer'&&!['ashish yadav','pravin bidaye'].some(function(n){return(m.name||'').toLowerCase().includes(n);});}).map(function(m){
-        var rec=supaData.find(function(r){return r.member_id===m.id||_attNameMatch(r.member_name,m.name);});
-        // Check localStorage: if local session active, user IS active regardless of Supabase state (handles re-login before Supabase sync)
+        // Aggregate ALL records for this member (handles multiple records per day)
+        var recs=supaData.filter(function(r){return r.member_id===m.id||_attNameMatch(r.member_name,m.name);});
         var localSessKey='att_sess_'+m.id+'_'+today;
         var localSess=localStorage.getItem(localSessKey);
-        if(!rec&&!localSess)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:0};
-        var hours=rec?parseFloat(rec.total_hours||0):0;
-        var effectiveLogout=localSess?null:(rec?rec.logout_time:null); // local active overrides Supabase logout_time
-        var activeSess=localSess||rec&&(rec.session_start||(!rec.logout_time&&rec.login_time?rec.login_time:null));
-        if(!effectiveLogout&&activeSess){
-          hours=(rec?parseFloat(rec.total_hours||0):0)+Math.max(0,(Date.now()-new Date(activeSess))/3600000);
-        }
-        var firstLoginKey='att_login_'+(rec?rec.member_id:m.id)+'_'+today;
+        if(!recs.length&&!localSess)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:0};
+        var openRec=recs.find(function(r){return !r.logout_time;});
+        var closedHours=recs.filter(function(r){return r.logout_time;}).reduce(function(sum,r){return sum+parseFloat(r.total_hours||0);},0);
+        var activeAccum=parseFloat((openRec&&openRec.total_hours)||0);
+        var effectiveLogout=localSess?null:(openRec?null:(recs.length?recs[recs.length-1].logout_time:null));
+        var activeSess=localSess||(openRec&&(openRec.session_start||openRec.login_time));
+        var hours=closedHours+activeAccum;
+        if(!effectiveLogout&&activeSess){hours+=Math.max(0,(Date.now()-new Date(activeSess))/3600000);}
+        var firstLogin=recs.reduce(function(min,r){return(!min||new Date(r.login_time)<new Date(min))?r.login_time:min;},null);
+        var firstLoginKey='att_login_'+m.id+'_'+today;
         var localFirstLogin=localStorage.getItem(firstLoginKey);
-        var supaBase=rec?parseFloat(rec.total_hours||0):0;
-        return{member:m,today_status:'present',login_time:(rec&&rec.login_time)||localFirstLogin,logout_time:effectiveLogout,today_hours:parseFloat(hours).toFixed(1),isActive:!effectiveLogout&&!!activeSess,prevHours:supaBase,sessStart:(!effectiveLogout&&activeSess)||''};
+        var supaBase=closedHours+activeAccum;
+        return{member:m,today_status:'present',login_time:firstLogin||localFirstLogin,logout_time:effectiveLogout,today_hours:parseFloat(hours).toFixed(1),isActive:!effectiveLogout&&!!(activeSess||localSess),prevHours:supaBase,sessStart:(!effectiveLogout&&activeSess)||''};
       });
       _renderSummary(merged);
     }
@@ -3304,38 +3309,49 @@ async function loadAttendance(){
 // ── Auto-refresh attendance panel every 5 seconds ──
 function _startAttPanelRefresh(){
   _stopAttPanelRefresh();
+  _attTickSupaCache=null;_attTickSupaLastFetch=0; // force fresh fetch on open
   _attPanelRefreshTick(); // immediate first tick
   _attPanelTimer=setInterval(_attPanelRefreshTick,1000);
 }
 function _stopAttPanelRefresh(){
   if(_attPanelTimer){clearInterval(_attPanelTimer);_attPanelTimer=null;}
 }
-var _attAutoLogoutDone=new Set(); // track records already auto-logged-out to avoid repeat updates
+var _attAutoLogoutDone=new Set();
+var _attTickSupaCache=null,_attTickSupaLastFetch=0;
 async function _attPanelRefreshTick(){
   var attView=document.getElementById('view-attendance');
   if(!attView||attView.style.display==='none')return;
   var now=new Date();
   var today=now.toISOString().slice(0,10);
-  var supa=await _getAttSupa();
-  if(!supa)return;
-  var res=await supa.from('attendance').select('*').eq('date',today);
-  if(!res||!res.data||!res.data.length)return;
+  // Only fetch from Supabase every 30s — use cached data in between
+  if(!_attTickSupaCache||Date.now()-_attTickSupaLastFetch>30000){
+    var supa=await _getAttSupa();
+    if(!supa)return;
+    var res=await supa.from('attendance').select('*').eq('date',today);
+    if(!res||!res.data||!res.data.length)return;
+    _attTickSupaCache=res.data;_attTickSupaLastFetch=Date.now();
+  }
   // Filter out admin records from Supabase data before merging
   var _adminSkip=['ashish yadav','pravin bidaye','ashish'];
-  var supaData=res.data.filter(function(r){
+  var supaData=_attTickSupaCache.filter(function(r){
     return !_adminSkip.some(function(n){return(r.member_name||'').toLowerCase().includes(n);});
   });
-  // Merge with members list (exclude admins/reviewers)
-  var merged=db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer'&&!['ashish yadav','pravin bidaye'].some(function(n){return(m.name||'').toLowerCase().includes(n);});}).map(function(m){
-    var rec=supaData.find(function(r){return r.member_id===m.id||_attNameMatch(r.member_name,m.name);});
-    if(!rec)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:'0.0'};
-    var hours=rec.total_hours||0;
-    var activeSess=rec.session_start||(!rec.logout_time&&rec.login_time?rec.login_time:null);
-    if(!rec.logout_time&&activeSess){
-      // accumulated hours from prior sessions + current active session
-      hours=(rec.total_hours||0)+Math.max(0,(Date.now()-new Date(activeSess))/3600000);
-    }
-    return{member:m,today_status:'present',login_time:rec.login_time,logout_time:rec.logout_time,today_hours:parseFloat(hours).toFixed(1)};
+  // Merge with members list — aggregate ALL records per member
+  var _seenTickNames=[];
+  var merged=db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer'&&!['ashish yadav','pravin bidaye'].some(function(n){return(m.name||'').toLowerCase().includes(n);});}).filter(function(m){
+    var n=(m.name||'');if(_seenTickNames.some(function(x){return _attNameMatch(x,n);}))return false;_seenTickNames.push(n);return true;
+  }).map(function(m){
+    var recs=supaData.filter(function(r){return r.member_id===m.id||_attNameMatch(r.member_name,m.name);});
+    if(!recs.length)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:'0.0'};
+    var openRec=recs.find(function(r){return !r.logout_time;});
+    var closedHours=recs.filter(function(r){return r.logout_time;}).reduce(function(sum,r){return sum+parseFloat(r.total_hours||0);},0);
+    var activeAccum=parseFloat((openRec&&openRec.total_hours)||0);
+    var activeSess=openRec&&(openRec.session_start||openRec.login_time);
+    var logout_time=openRec?null:(recs.length?recs[recs.length-1].logout_time:null);
+    var hours=closedHours+activeAccum;
+    if(!logout_time&&activeSess){hours+=Math.max(0,(Date.now()-new Date(activeSess))/3600000);}
+    var firstLogin=recs.reduce(function(min,r){return(!min||new Date(r.login_time)<new Date(min))?r.login_time:min;},null);
+    return{member:m,today_status:'present',login_time:firstLogin,logout_time:logout_time,today_hours:parseFloat(hours).toFixed(1)};
   });
   // Update stats counters
   var present=merged.filter(function(s){return s.today_status==='present';}).length;
