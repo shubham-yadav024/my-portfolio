@@ -3461,33 +3461,36 @@ async function _loadAttHistoryFromSupa(from,to){
     var res=await q;
     if(!res||!res.data)return null;
     var raw=res.data;
-    // Group by (date, canonical db.members ID) — most reliable, handles null/different names
+    var today=new Date().toISOString().slice(0,10);
+    // Group by (date, canonical db.members ID) — one row per employee per day
     var groups={};
     raw.forEach(function(r){
       var mem=db.members.find(function(m){return(r.member_id&&m.id===r.member_id)||_attNameMatch(m.name,r.member_name||'');});
       var canonId=mem?mem.id:(r.member_id||('_name_'+_normAttName(r.member_name||'')));
       var key=r.date+'__'+canonId;
-      // Hours for this individual record — compute from timestamps if total_hours missing
-      var recHours=parseFloat(r.total_hours||0);
-      if(!recHours&&r.login_time&&r.logout_time){recHours=Math.max(0,(new Date(r.logout_time)-new Date(r.login_time))/3600000);}
       if(!groups[key]){
-        groups[key]=Object.assign({},r,{total_hours:recHours,_canon_id:canonId});
+        groups[key]=Object.assign({},r,{_canon_id:canonId});
       }else{
         var g=groups[key];
+        // Keep earliest login_time
         if(r.login_time&&g.login_time&&new Date(r.login_time)<new Date(g.login_time))g.login_time=r.login_time;
-        if(!r.logout_time)g.logout_time=null;
-        else if(g.logout_time&&new Date(r.logout_time)>new Date(g.logout_time))g.logout_time=r.logout_time;
-        g.total_hours=parseFloat(g.total_hours||0)+recHours;
+        // Keep latest logout_time (null only if truly still active today)
+        if(!r.logout_time&&r.date>=today)g.logout_time=null;
+        else if(r.logout_time&&(!g.logout_time||new Date(r.logout_time)>new Date(g.logout_time)))g.logout_time=r.logout_time;
         if(!g.member_id&&r.member_id)g.member_id=r.member_id;
         if(!g.member_name&&r.member_name)g.member_name=r.member_name;
       }
     });
     var result=Object.values(groups);
-    // Final pass: if hours still 0 but login+logout exist, compute from timestamps
+    // Final pass: hours = first_login to last_logout (wall-clock — user requested)
+    // Past days with no logout → treat 6:15 PM IST as logout (display only, no DB change)
     result.forEach(function(r){
-      if(!parseFloat(r.total_hours||0)&&r.login_time&&r.logout_time){
-        r.total_hours=Math.max(0,(new Date(r.logout_time)-new Date(r.login_time))/3600000);
+      var effectiveLogout=r.logout_time;
+      if(!effectiveLogout&&r.date<today){
+        effectiveLogout=r.date+'T12:45:00.000+00:00'; // 6:15 PM IST in UTC
+        r.logout_time=effectiveLogout; // _fmtLogout shows '—' for this
       }
+      r.total_hours=r.login_time&&effectiveLogout?Math.max(0,(new Date(effectiveLogout)-new Date(r.login_time))/3600000):0;
     });
     return result;
   }catch(e){return null;}
