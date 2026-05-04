@@ -2010,7 +2010,8 @@ async function sendChatMessage() {
       gcCancelReply();
       if (supa) {
         var payload = JSON.stringify({ n: senderName, t: content, r: replyId, rn: replyName, rt: replyText });
-        await supa.from('messages').insert({ sender_id: senderId, receiver_id: 'group-general', content: payload });
+        var res = await supa.from('messages').insert({ sender_id: senderId, receiver_id: 'group-general', content: payload }).select().single();
+        if (res && res.data && !chatMessages.find(function(m){return m.id===res.data.id;})){chatMessages.push(res.data);renderChatMessages();}
       }
       toast('File sent!', 'success');
     } catch(e) {
@@ -2026,9 +2027,13 @@ async function sendChatMessage() {
   if (supa) {
     try {
       var payload = JSON.stringify({ n: senderName, t: caption, r: replyId, rn: replyName, rt: replyText });
-      var res = await supa.from('messages').insert({ sender_id: senderId, receiver_id: 'group-general', content: payload });
+      var res = await supa.from('messages').insert({ sender_id: senderId, receiver_id: 'group-general', content: payload }).select().single();
       if (res && res.error) throw res.error;
-      // Realtime subscription handles UI update automatically
+      // Show immediately with real DB id — realtime dedup prevents double-add
+      if (res && res.data && !chatMessages.find(function(m){return m.id===res.data.id;})){
+        chatMessages.push(res.data);
+        renderChatMessages();
+      }
     } catch(e) {
       // Local fallback — show immediately
       chatMessages.push({ id: Date.now(), sender_id: senderId, sender_name: senderName, content: JSON.stringify({ n: senderName, t: caption }), created_at: new Date().toISOString() });
