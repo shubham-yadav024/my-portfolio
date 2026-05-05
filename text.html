@@ -2736,6 +2736,8 @@ function _checkAutoLogout(){
     localStorage.removeItem('taskflow_token');
     localStorage.removeItem('taskflow_user');
     localStorage.removeItem('tfp2_session');
+    localStorage.removeItem('tfp2_session_date');
+    _clearStaleAttState();
     toast('Aaj ka kaam khatam! Kal milte hain 🌙','info');
     setTimeout(function(){
       currentUser=null;
@@ -3859,6 +3861,8 @@ function hardReset(){if(!confirm('Reset all data?'))return;localStorage.removeIt
 function renderAll(){renderDashboard();renderTaskList();renderFieldJobs();renderEscalation();if(isAdmin()){renderTeam();renderActivity();}updateBadges();scheduleAll();}
 
 function launchApp(){
+  // Stamp today's date so init() can detect next-day stale sessions
+  localStorage.setItem('tfp2_session_date',new Date().toISOString().slice(0,10));
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app-layout').style.display='flex';
   applyRoleUI();
@@ -5429,7 +5433,26 @@ function joinCall(){const room=document.getElementById('call-room-name').value.t
 function copyCallLink(){const room=document.getElementById('call-room-name').value.trim().replace(/\s+/g,'-').toLowerCase()||'pushp-ci-team';const link='https://meet.jit.si/'+encodeURIComponent(room);navigator.clipboard.writeText(link).then(()=>toast('Link copied!','success')).catch(()=>{const el=document.createElement('textarea');el.value=link;document.body.appendChild(el);el.select();document.execCommand('copy');document.body.removeChild(el);toast('Link copied!','success');});}
 document.addEventListener('input',function(e){if(e.target&&e.target.id==='call-room-name')updateCallLink();});
 
+function _clearStaleAttState(){
+  // Clear attendance localStorage keys that are tied to a specific session/record
+  localStorage.removeItem('att_supa_id');
+  localStorage.removeItem('att_login_time');
+  localStorage.removeItem('att_member_id');
+  localStorage.removeItem('att_session_id');
+}
 function init(){
+  var today=new Date().toISOString().slice(0,10);
+  var sessionDate=localStorage.getItem('tfp2_session_date');
+  // If session was created on a previous day, force fresh login
+  if(sessionDate&&sessionDate!==today){
+    localStorage.removeItem('taskflow_token');
+    localStorage.removeItem('taskflow_user');
+    localStorage.removeItem('tfp2_session');
+    localStorage.removeItem('tfp2_session_date');
+    _clearStaleAttState();
+    document.getElementById('login-screen').style.display='flex';
+    return;
+  }
   if(AuthAPI.isLoggedIn()){
     const u=AuthAPI.getCurrentUser();
     if(u){
