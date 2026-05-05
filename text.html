@@ -2684,7 +2684,16 @@ async function attendanceLogout(){
     if(!supa)return;
     var update={logout_time:now.toISOString(),total_hours:parseFloat(newTotal.toFixed(2)),session_start:null};
     if(supaId){
-      supa.from('attendance').update(update).eq('id',supaId).then(function(){}).catch(function(){});
+      // Verify the stored record belongs to today before updating (prevents stale-id next-day bug)
+      supa.from('attendance').select('date').eq('id',supaId).single().then(function(chk){
+        if(chk&&chk.data&&chk.data.date===today){
+          supa.from('attendance').update(update).eq('id',supaId).then(function(){}).catch(function(){});
+        }else{
+          supa.from('attendance').update(update).eq('member_id',memberId).eq('date',today).then(function(){}).catch(function(){});
+        }
+      }).catch(function(){
+        supa.from('attendance').update(update).eq('member_id',memberId).eq('date',today).then(function(){}).catch(function(){});
+      });
     }else{
       // Find by member_id and date
       supa.from('attendance').update(update).eq('member_id',memberId).eq('date',today).then(function(){}).catch(function(){});
