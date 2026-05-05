@@ -2520,6 +2520,31 @@ window._getAttSupa=async function _getAttSupa(){
   return _attSupaClient;
 }
 
+async function _closeStaleSessionsOnLogin(memberId,memberName,today){
+  try{
+    var supa=await _getAttSupa();
+    if(!supa)return;
+    // Find any open sessions (null logout) from days before today
+    var q=supa.from('attendance').select('id,date,login_time').is('logout_time',null).lt('date',today);
+    if(memberId)q=q.eq('member_id',memberId);
+    var res=await q;
+    if(!res||!res.data||!res.data.length){
+      // Also try by name if no results by ID
+      if(memberName){
+        var q2=supa.from('attendance').select('id,date,login_time').is('logout_time',null).lt('date',today).eq('member_name',memberName);
+        var res2=await q2;
+        if(res2&&res2.data&&res2.data.length)res={data:res2.data};else return;
+      }else return;
+    }
+    res.data.forEach(function(r){
+      var logoutISO=r.date+'T12:49:00.000+00:00'; // 6:19 PM IST
+      var logoutDT=new Date(logoutISO);
+      var loginDT=r.login_time?new Date(r.login_time):null;
+      var hours=loginDT?Math.max(0,Math.round((logoutDT-loginDT)/36000)/100):0;
+      supa.from('attendance').update({logout_time:logoutISO,total_hours:hours,session_start:null}).eq('id',r.id).then(function(){}).catch(function(){});
+    });
+  }catch(e){}
+}
 async function attendanceLogin(memberId){
   // Sunday = holiday, no attendance
   if(new Date().getDay()===0)return;
@@ -2549,6 +2574,10 @@ async function attendanceLogin(memberId){
   if(_skipNames.some(function(n){return canonicalName.toLowerCase().includes(n);}))return;
 
   var today=new Date().toISOString().slice(0,10);
+
+  // Close any open sessions from previous days for this member
+  _closeStaleSessionsOnLogin(id,canonicalName,today);
+
   var firstLoginKey='att_login_'+id+'_'+today;   // first login time of day (never deleted)
   var sessKey='att_sess_'+id+'_'+today;           // current active session start
   var totalKey='att_total_'+id+'_'+today;         // accumulated hours from completed sessions
