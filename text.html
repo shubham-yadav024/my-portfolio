@@ -2506,7 +2506,7 @@ var _attPanelTimer=null;
 var _attLastSupaData=null;
 
 function _normAttName(s){return(s||'').toLowerCase().replace(/\b(mr|mrs|ms|dr|prof)\b\.?/gi,'').replace(/[.\-_]/g,' ').replace(/\s+/g,' ').trim();}
-function _fmtLogout(t){if(!t)return'—';var d=new Date(t);if(d.getUTCHours()===12&&d.getUTCMinutes()===45)return'—';return d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});}
+function _fmtLogout(t){if(!t)return'—';var d=new Date(t);return d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});}
 function _attNameMatch(a,b){var na=_normAttName(a),nb=_normAttName(b);if(!na||!nb)return false;if(na===nb||na.includes(nb)||nb.includes(na))return true;var wa=na.split(' ').filter(function(w){return w.length>3;});var wb=nb.split(' ').filter(function(w){return w.length>3;});return wa.some(function(w){return wb.includes(w);});}
 window._getAttSupa=async function _getAttSupa(){
   if(_attSupaClient)return _attSupaClient;
@@ -3440,18 +3440,36 @@ async function _attPanelRefreshTick(){
   });
 }
 
-// Auto-close unclosed sessions from past days at 6:15 PM
+// Auto-save 6:19 PM IST for a single past day's unclosed sessions
 async function _autoCloseStaleAttSessions(supa,date){
   try{
-    var stale=await supa.from('attendance').select('id,login_time,session_start,total_hours').eq('date',date).is('logout_time',null);
+    var today=new Date().toISOString().slice(0,10);
+    if(date>=today)return;
+    var stale=await supa.from('attendance').select('id,login_time,total_hours').eq('date',date).is('logout_time',null);
     if(!stale||!stale.data||!stale.data.length)return;
-    var logoutISO=date+'T12:45:00.000+00:00'; // 6:15 PM IST
+    var logoutISO=date+'T12:49:00.000+00:00'; // 6:19 PM IST = 12:49 UTC
     var logoutDT=new Date(logoutISO);
     stale.data.forEach(function(r){
-      var sessDT=r.session_start?new Date(r.session_start):new Date(r.login_time);
-      var prev=parseFloat(r.total_hours||0);
-      var curr=Math.max(0,(logoutDT-sessDT)/3600000);
-      var total=Math.round((prev+curr)*100)/100;
+      var loginDT=r.login_time?new Date(r.login_time):null;
+      var total=loginDT?Math.max(0,Math.round((logoutDT-loginDT)/36000)/100):parseFloat(r.total_hours||0);
+      supa.from('attendance').update({logout_time:logoutISO,total_hours:total,session_start:null}).eq('id',r.id).then(function(){}).catch(function(){});
+    });
+  }catch(e){}
+}
+// Auto-save 6:19 PM IST for ALL past days with unclosed sessions in a date range
+async function _autoCloseStaleRange(supa,from,to){
+  try{
+    var today=new Date().toISOString().slice(0,10);
+    var q=supa.from('attendance').select('id,date,login_time,total_hours').is('logout_time',null).lt('date',today);
+    if(from)q=q.gte('date',from);
+    if(to)q=q.lte('date',to<today?to:today);
+    var stale=await q;
+    if(!stale||!stale.data||!stale.data.length)return;
+    stale.data.forEach(function(r){
+      var logoutISO=r.date+'T12:49:00.000+00:00'; // 6:19 PM IST
+      var logoutDT=new Date(logoutISO);
+      var loginDT=r.login_time?new Date(r.login_time):null;
+      var total=loginDT?Math.max(0,Math.round((logoutDT-loginDT)/36000)/100):parseFloat(r.total_hours||0);
       supa.from('attendance').update({logout_time:logoutISO,total_hours:total,session_start:null}).eq('id',r.id).then(function(){}).catch(function(){});
     });
   }catch(e){}
@@ -3496,6 +3514,8 @@ async function _loadAttHistoryFromSupa(from,to){
     if(!res||!res.data)return null;
     var raw=res.data;
     var today=new Date().toISOString().slice(0,10);
+    // Auto-save 6:19 PM IST for any past-day records still missing logout_time
+    _autoCloseStaleRange(supa,from,to);
     // Group by (date, canonical db.members ID) — one row per employee per day
     var groups={};
     raw.forEach(function(r){
@@ -3521,8 +3541,8 @@ async function _loadAttHistoryFromSupa(from,to){
     result.forEach(function(r){
       var effectiveLogout=r.logout_time;
       if(!effectiveLogout&&r.date<today){
-        effectiveLogout=r.date+'T12:45:00.000+00:00'; // 6:15 PM IST in UTC
-        r.logout_time=effectiveLogout; // _fmtLogout shows '—' for this
+        effectiveLogout=r.date+'T12:49:00.000+00:00'; // 6:19 PM IST = 12:49 UTC
+        r.logout_time=effectiveLogout;
       }
       r.total_hours=r.login_time&&effectiveLogout?Math.max(0,(new Date(effectiveLogout)-new Date(r.login_time))/3600000):0;
     });
