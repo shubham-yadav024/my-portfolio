@@ -3313,17 +3313,17 @@ async function loadAttendance(){
         var localSess=localStorage.getItem(localSessKey);
         if(!recs.length&&!localSess)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:0};
         var openRec=recs.find(function(r){return !r.logout_time;});
-        var closedHours=recs.filter(function(r){return r.logout_time;}).reduce(function(sum,r){return sum+parseFloat(r.total_hours||0);},0);
-        var activeAccum=parseFloat((openRec&&openRec.total_hours)||0);
-        var effectiveLogout=localSess?null:(openRec?null:(recs.length?recs[recs.length-1].logout_time:null));
+        var firstLogin=recs.reduce(function(min,r){return r.login_time&&(!min||new Date(r.login_time)<new Date(min))?r.login_time:min;},null);
+        var lastLogout=recs.filter(function(r){return r.logout_time;}).reduce(function(lat,r){return(!lat||new Date(r.logout_time)>new Date(lat))?r.logout_time:lat;},null);
+        var effectiveLogout=localSess?null:(openRec?null:lastLogout);
         var activeSess=localSess||(openRec&&(openRec.session_start||openRec.login_time));
-        var hours=closedHours+activeAccum;
-        if(!effectiveLogout&&activeSess){hours+=Math.max(0,(Date.now()-new Date(activeSess))/3600000);}
-        var firstLogin=recs.reduce(function(min,r){return(!min||new Date(r.login_time)<new Date(min))?r.login_time:min;},null);
         var firstLoginKey='att_login_'+m.id+'_'+today;
         var localFirstLogin=localStorage.getItem(firstLoginKey);
-        var supaBase=closedHours+activeAccum;
-        return{member:m,today_status:'present',login_time:firstLogin||localFirstLogin,logout_time:effectiveLogout,today_hours:parseFloat(hours).toFixed(1),isActive:!effectiveLogout&&!!(activeSess||localSess),prevHours:supaBase,sessStart:(!effectiveLogout&&activeSess)||''};
+        var fl=firstLogin||localFirstLogin;
+        var hours=0;
+        if(fl&&effectiveLogout){hours=Math.max(0,(new Date(effectiveLogout)-new Date(fl))/3600000);}
+        else if(fl&&(activeSess||localSess)){hours=Math.max(0,(Date.now()-new Date(fl))/3600000);}
+        return{member:m,today_status:'present',login_time:fl,logout_time:effectiveLogout,today_hours:parseFloat(hours).toFixed(1),isActive:!effectiveLogout&&!!(activeSess||localSess),prevHours:hours,sessStart:(!effectiveLogout&&activeSess)||''};
       });
       _renderSummary(merged);
     }
@@ -3436,13 +3436,13 @@ async function _attPanelRefreshTick(){
     var recs=supaData.filter(function(r){return r.member_id===m.id||_attNameMatch(r.member_name,m.name);});
     if(!recs.length)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:'0.0'};
     var openRec=recs.find(function(r){return !r.logout_time;});
-    var closedHours=recs.filter(function(r){return r.logout_time;}).reduce(function(sum,r){return sum+parseFloat(r.total_hours||0);},0);
-    var activeAccum=parseFloat((openRec&&openRec.total_hours)||0);
+    var firstLogin=recs.reduce(function(min,r){return r.login_time&&(!min||new Date(r.login_time)<new Date(min))?r.login_time:min;},null);
+    var lastLogout=recs.filter(function(r){return r.logout_time;}).reduce(function(lat,r){return(!lat||new Date(r.logout_time)>new Date(lat))?r.logout_time:lat;},null);
+    var logout_time=openRec?null:lastLogout;
     var activeSess=openRec&&(openRec.session_start||openRec.login_time);
-    var logout_time=openRec?null:(recs.length?recs[recs.length-1].logout_time:null);
-    var hours=closedHours+activeAccum;
-    if(!logout_time&&activeSess){hours+=Math.max(0,(Date.now()-new Date(activeSess))/3600000);}
-    var firstLogin=recs.reduce(function(min,r){return(!min||new Date(r.login_time)<new Date(min))?r.login_time:min;},null);
+    var hours=0;
+    if(firstLogin&&logout_time){hours=Math.max(0,(new Date(logout_time)-new Date(firstLogin))/3600000);}
+    else if(firstLogin&&(openRec||activeSess)){hours=Math.max(0,(Date.now()-new Date(firstLogin))/3600000);}
     return{member:m,today_status:'present',login_time:firstLogin,logout_time:logout_time,today_hours:parseFloat(hours).toFixed(1)};
   });
   // Update stats counters
