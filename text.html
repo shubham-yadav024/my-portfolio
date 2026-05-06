@@ -3107,6 +3107,7 @@ function downloadEmpAtt(){
 
 async function exportAttendanceExcel(){
   const today=new Date().toISOString().slice(0,10);
+  const nowDT=new Date();
   const from=document.getElementById('att-from')?.value||today;
   const to=document.getElementById('att-to')?.value||today;
   const exportedOn=new Date().toLocaleString('en-IN',{timeZone:'Asia/Kolkata',dateStyle:'long',timeStyle:'short'});
@@ -3125,38 +3126,49 @@ async function exportAttendanceExcel(){
     }catch(e){}
   }
 
-  // Build rows from Supabase data merged with members
-  const dataRows=[];
-  if(supaRows.length>0){
-    supaRows.forEach(function(r){
-      const member=db.members.find(function(m){
-        return m.id===r.member_id||(r.member_name&&m.name&&m.name.toLowerCase()===r.member_name.toLowerCase());
-      })||{name:r.member_name||r.member_id||'—',role:'—'};
-      const date=new Date(r.date+'T12:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
-      const loginT=r.login_time?new Date(r.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
-      const logoutT=r.logout_time?(_fmtLogout(r.logout_time)||'Active'):'Active';
-      const hrs=parseFloat(r.total_hours||0);
-      const hDisplay=Math.floor(hrs)+'h '+(Math.round((hrs%1)*60))+'m';
-      const status=r.status==='present'?'Present':'Absent';
-      dataRows.push([member.name,member.role||'—',date,loginT,logoutT,hDisplay,status]);
-    });
-  }else{
-    // Fallback: use today's panel data from DOM
-    document.querySelectorAll('.att-row').forEach(function(row){
-      const name=row.querySelector('div[style*="font-size:14px"]')?.textContent?.replace('(You)','').trim()||'—';
-      const role=row.querySelector('div[style*="font-size:12px"]')?.textContent||'—';
-      const loginT=row.querySelector('.att-login')?.textContent||'—';
-      const logoutT=row.querySelector('.att-logout')?.textContent||'—';
-      const hoursT=row.querySelector('.att-hours')?.textContent||'0h';
-      const statusT=row.querySelector('.att-badge')?.textContent?.trim().replace(/[^\w\s]/g,'')||'Absent';
-      dataRows.push([name,role,fromFmt,loginT,logoutT,hoursT,statusT.trim()]);
-    });
-  }
+  // Group by (date, canonical db.members ID) — dedup duplicates, resolve full names
+  const groups={};
+  supaRows.forEach(function(r){
+    const mem=db.members.find(function(m){return(r.member_id&&m.id===r.member_id)||_attNameMatch(m.name,r.member_name||'');});
+    if(!mem)return; // skip UUID/unknown names
+    if(mem.role==='admin'||mem.role==='reviewer'||_isMemberAdmin(mem))return; // skip admins
+    const key=r.date+'__'+mem.id;
+    if(!groups[key]){
+      groups[key]=Object.assign({},r,{_mem:mem});
+    }else{
+      const g=groups[key];
+      if(r.login_time&&g.login_time&&new Date(r.login_time)<new Date(g.login_time))g.login_time=r.login_time;
+      if(!r.logout_time&&r.date>=today)g.logout_time=null;
+      else if(r.logout_time&&(!g.logout_time||new Date(r.logout_time)>new Date(g.logout_time)))g.logout_time=r.logout_time;
+    }
+  });
 
-  // Calculate summary stats
-  const totalPresent=dataRows.filter(r=>r[6]==='Present').length;
-  const totalAbsent=dataRows.filter(r=>r[6]==='Absent').length;
-  const totalHoursAll=supaRows.reduce(function(s,r){return s+parseFloat(r.total_hours||0);},0);
+  // Build final rows with correct hours (wall-clock)
+  const dataRows=[];
+  Object.values(groups).sort(function(a,b){return a.date.localeCompare(b.date)||a._mem.name.localeCompare(b._mem.name);}).forEach(function(r){
+    const mem=r._mem;
+    const date=new Date(r.date+'T12:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+    const loginT=r.login_time?new Date(r.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
+    // Determine effective logout
+    var effectiveLogout=r.logout_time;
+    var isActive=false;
+    if(!effectiveLogout&&r.date===today){isActive=true;}
+    else if(!effectiveLogout&&r.date<today){effectiveLogout=r.date+'T12:49:00.000+00:00';}
+    const logoutT=isActive?'Active':(effectiveLogout?_fmtLogout(effectiveLogout):'—');
+    // Wall-clock hours
+    var hrs=0;
+    if(r.login_time&&effectiveLogout)hrs=Math.max(0,(new Date(effectiveLogout)-new Date(r.login_time))/3600000);
+    else if(r.login_time&&isActive)hrs=Math.max(0,(nowDT-new Date(r.login_time))/3600000);
+    const hDisplay=Math.floor(hrs)+'h '+Math.round((hrs%1)*60)+'m';
+    dataRows.push([mem.name,mem.role||'—',date,loginT,logoutT,hDisplay,'Present']);
+  });
+
+  // Summary stats
+  const totalPresent=dataRows.length;
+  const totalAbsent=0;
+  var totalHoursAll=dataRows.reduce(function(s,r){
+    var m=r[5].match(/(\d+)h\s*(\d+)m/);return s+(m?parseFloat(m[1])+parseFloat(m[2])/60:0);
+  },0);
 
   // Build professional CSV
   const Q=function(v){return'"'+String(v||'').replace(/"/g,'""')+'"';};
