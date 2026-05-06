@@ -5476,8 +5476,8 @@ function _clearStaleAttState(){
 function init(){
   var today=new Date().toISOString().slice(0,10);
   var sessionDate=localStorage.getItem('tfp2_session_date');
-  // If session was created on a previous day, force fresh login
-  if(sessionDate&&sessionDate!==today){
+  // No date stamp (old session) OR date is from a previous day → force fresh login
+  if(!sessionDate||sessionDate!==today){
     localStorage.removeItem('taskflow_token');
     localStorage.removeItem('taskflow_user');
     localStorage.removeItem('tfp2_session');
