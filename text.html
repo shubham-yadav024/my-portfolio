@@ -3129,7 +3129,7 @@ async function exportAttendanceExcel(){
   // Group by (date, canonical db.members ID)
   const groups={};
   supaRows.forEach(function(r){
-    const mem=db.members.find(function(m){return(r.member_id&&m.id===r.member_id)||_attNameMatch(m.name,r.member_name||'');});
+    const mem=db.members.find(function(m){return r.member_id?m.id===r.member_id:_attNameMatch(m.name,r.member_name||'');});
     if(!mem)return;
     if(mem.role==='admin'||mem.role==='reviewer'||_isMemberAdmin(mem))return;
     const key=r.date+'__'+mem.id;
@@ -3563,7 +3563,7 @@ async function _loadAttHistoryFromSupa(from,to){
     // Group by (date, canonical db.members ID) — one row per employee per day
     var groups={};
     raw.forEach(function(r){
-      var mem=db.members.find(function(m){return(r.member_id&&m.id===r.member_id)||_attNameMatch(m.name,r.member_name||'');});
+      var mem=db.members.find(function(m){return r.member_id?m.id===r.member_id:_attNameMatch(m.name,r.member_name||'');});
       var canonId=mem?mem.id:(r.member_id||('_name_'+_normAttName(r.member_name||'')));
       var key=r.date+'__'+canonId;
       if(!groups[key]){
@@ -3741,7 +3741,7 @@ let currentUser=null;
 let db=JSON.parse(localStorage.getItem('tfp2_db')||'null')||{
   members:[
    {id:'m1',name:'Atmaram Babu',role:'Site engg',phone:'',email:'',color:'#2e7d32',type:'field'},
-{id:'m2',name:'MR K Suresh',role:'Consultant',phone:'',email:'',color:'#2ecc8a',type:'office'},
+{id:'m2',name:'K Suresh',role:'Consultant',phone:'',email:'',color:'#2ecc8a',type:'office'},
 {id:'m3',name:'Shubham Yadav',role:'Engineer',phone:'',email:'',color:'#f5a623',type:'office'},
 {id:'m4',name:'Madhavi Jedhe',role:'Consultant',phone:'',email:'',color:'#448aff',type:'office'},
 {id:'m5',name:'Vijay B Tawade',role:'Site supervisor',phone:'',email:'',color:'#26c6da',type:'field'},
@@ -3754,7 +3754,7 @@ let db=JSON.parse(localStorage.getItem('tfp2_db')||'null')||{
 function saveDB(){localStorage.setItem('tfp2_db',JSON.stringify(db));window.db=db;}
 // Fix legacy member names + mark Ashish & Pravin as admin (exclude from attendance)
 (function(){
-  var namefix={'Vijay .B. Tawade':'Vijay B Tawade','MR K Suresh':'Mr K Suresh'};
+  var namefix={'Vijay .B. Tawade':'Vijay B Tawade','MR K Suresh':'K Suresh','Mr K Suresh':'K Suresh'};
   var adminNames=['ashish yadav','pravin bidaye','ashish','pravin'];
   var changed=false;
   db.members.forEach(function(m){
