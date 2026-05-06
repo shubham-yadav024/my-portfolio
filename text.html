@@ -3305,7 +3305,7 @@ async function loadAttendance(){
     if(supaData&&supaData.length>0){
       var merged=db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer'&&!['ashish yadav','pravin bidaye'].some(function(n){return(m.name||'').toLowerCase().includes(n);});}).map(function(m){
         // Aggregate ALL records for this member (handles multiple records per day)
-        var recs=supaData.filter(function(r){return r.member_id===m.id||_attNameMatch(r.member_name,m.name);});
+        var recs=supaData.filter(function(r){return r.member_id?r.member_id===m.id:_attNameMatch(r.member_name,m.name);});
         var localSessKey='att_sess_'+m.id+'_'+today;
         var localSess=localStorage.getItem(localSessKey);
         if(!recs.length&&!localSess)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:0};
@@ -3430,7 +3430,7 @@ async function _attPanelRefreshTick(){
   var merged=db.members.filter(function(m){return m.role!=='admin'&&m.role!=='reviewer'&&!['ashish yadav','pravin bidaye'].some(function(n){return(m.name||'').toLowerCase().includes(n);});}).filter(function(m){
     var n=(m.name||'');if(_seenTickNames.some(function(x){return _attNameMatch(x,n);}))return false;_seenTickNames.push(n);return true;
   }).map(function(m){
-    var recs=supaData.filter(function(r){return r.member_id===m.id||_attNameMatch(r.member_name,m.name);});
+    var recs=supaData.filter(function(r){return r.member_id?r.member_id===m.id:_attNameMatch(r.member_name,m.name);});
     if(!recs.length)return{member:m,today_status:'absent',login_time:null,logout_time:null,today_hours:'0.0'};
     var openRec=recs.find(function(r){return !r.logout_time;});
     var firstLogin=recs.reduce(function(min,r){return r.login_time&&(!min||new Date(r.login_time)<new Date(min))?r.login_time:min;},null);
