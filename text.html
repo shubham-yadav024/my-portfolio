@@ -3116,25 +3116,45 @@ async function exportAttendanceExcel(){
   const isSingleDay=from===to;
   const periodLabel=isSingleDay?fromFmt:fromFmt+' to '+toFmt;
 
-  // Use _loadAttHistoryFromSupa — same dedup logic as history view (one row per employee per day)
-  const rows=await _loadAttHistoryFromSupa(from,to)||[];
+  // Pull directly from Supabase, dedup by canonical member ID + date
+  const supa=await _getAttSupa();
+  let supaRows=[];
+  if(supa){
+    try{
+      const res=await supa.from('attendance').select('*').gte('date',from).lte('date',to).order('date',{ascending:true}).order('login_time',{ascending:true});
+      if(res&&res.data)supaRows=res.data;
+    }catch(e){}
+  }
 
-  const dataRows=[];
-  const _exportSeen=new Set();
-  rows.forEach(function(r){
-    const mem=db.members.find(function(m){return m.id===(r._canon_id||r.member_id)||_attNameMatch(m.name,r.member_name||'');});
+  // Group by (date, canonical db.members ID)
+  const groups={};
+  supaRows.forEach(function(r){
+    const mem=db.members.find(function(m){return(r.member_id&&m.id===r.member_id)||_attNameMatch(m.name,r.member_name||'');});
     if(!mem)return;
     if(mem.role==='admin'||mem.role==='reviewer'||_isMemberAdmin(mem))return;
-    const rowKey=r.date+'__'+mem.id;if(_exportSeen.has(rowKey))return;_exportSeen.add(rowKey);
+    const key=r.date+'__'+mem.id;
+    if(!groups[key]){
+      groups[key]=Object.assign({},r,{_mem:mem});
+    }else{
+      const g=groups[key];
+      // Keep earliest login_time
+      if(r.login_time&&g.login_time&&new Date(r.login_time)<new Date(g.login_time))g.login_time=r.login_time;
+      // Keep latest logout_time; null if still active today
+      if(!r.logout_time&&r.date>=today)g.logout_time=null;
+      else if(r.logout_time&&(!g.logout_time||new Date(r.logout_time)>new Date(g.logout_time)))g.logout_time=r.logout_time;
+    }
+  });
+
+  const dataRows=[];
+  Object.values(groups).sort(function(a,b){return a.date.localeCompare(b.date)||a._mem.name.localeCompare(b._mem.name);}).forEach(function(r){
+    const mem=r._mem;
     const date=new Date(r.date+'T12:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
     const loginT=r.login_time?new Date(r.login_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
-    var effectiveLogout=r.logout_time;
-    var isActive=false;
-    if(!effectiveLogout&&r.date===today){isActive=true;}
-    else if(!effectiveLogout&&r.date<today){effectiveLogout=r.date+'T12:49:00.000+00:00';}
-    const logoutT=isActive?'Active':(effectiveLogout?_fmtLogout(effectiveLogout):'—');
-    var hrs=parseFloat(r.total_hours||0);
-    if(!hrs&&r.login_time&&effectiveLogout)hrs=Math.max(0,(new Date(effectiveLogout)-new Date(r.login_time))/3600000);
+    var isActive=!r.logout_time&&r.date===today;
+    const logoutT=r.logout_time?_fmtLogout(r.logout_time):(isActive?'Active':'—');
+    // Wall-clock hours: login → logout (or now if active)
+    var hrs=0;
+    if(r.login_time&&r.logout_time)hrs=Math.max(0,(new Date(r.logout_time)-new Date(r.login_time))/3600000);
     else if(r.login_time&&isActive)hrs=Math.max(0,(nowDT-new Date(r.login_time))/3600000);
     const hDisplay=Math.floor(hrs)+'h '+Math.round((hrs%1)*60)+'m';
     dataRows.push([mem.name,mem.role||'—',date,loginT,logoutT,hDisplay,'Present']);
