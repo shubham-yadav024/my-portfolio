@@ -2633,16 +2633,20 @@ async function _attSyncToSupa(memberId,today,loginTime,currentSessStart,memberNa
     // Robust lookup: member_id first (use limit(1) to handle duplicates gracefully), then name scan
     var ex=null;
     if(memberId){
-      var _r1=await supa.from('attendance').select('id,total_hours,login_time').eq('member_id',memberId).eq('date',today).order('login_time',{ascending:true}).limit(1);
+      var _r1=await supa.from('attendance').select('id,date,total_hours,login_time').eq('member_id',memberId).eq('date',today).order('login_time',{ascending:true}).limit(1);
       if(_r1&&_r1.data&&_r1.data.length>0)ex={data:_r1.data[0]};
     }
     if(!ex&&memberName){
-      var _r2=await supa.from('attendance').select('id,total_hours,login_time').eq('date',today).ilike('member_name',memberName.trim()).order('login_time',{ascending:true}).limit(1);
+      var _r2=await supa.from('attendance').select('id,date,total_hours,login_time').eq('date',today).ilike('member_name',memberName.trim()).order('login_time',{ascending:true}).limit(1);
       if(_r2&&_r2.data&&_r2.data.length>0)ex={data:_r2.data[0]};
     }
     if(!ex&&memberName){
-      var all=await supa.from('attendance').select('id,total_hours,login_time,member_name').eq('date',today);
+      var all=await supa.from('attendance').select('id,date,total_hours,login_time,member_name').eq('date',today);
       if(all&&all.data){var _nm=_normAttName(memberName);var _match=all.data.find(function(r){return _normAttName(r.member_name)===_nm;});if(_match)ex={data:_match};}
+    }
+    if(ex&&ex.data){
+      // Safety: never update a record from a different date (prevents cross-day corruption)
+      if(ex.data.date&&ex.data.date!==today){ex=null;}
     }
     if(ex&&ex.data){
       localStorage.setItem('att_supa_id',ex.data.id);
