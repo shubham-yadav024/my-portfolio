@@ -3319,7 +3319,7 @@ async function loadAttendance(){
         var activeSess=localSess||(openRec&&(openRec.session_start||openRec.login_time));
         var hours=closedHours+activeAccum;
         if(!effectiveLogout&&activeSess){hours+=Math.max(0,(Date.now()-new Date(activeSess))/3600000);}
-        var firstLogin=recs.reduce(function(min,r){return(!min||new Date(r.login_time)<new Date(min))?r.login_time:min;},null);
+        var firstLogin=recs.reduce(function(min,r){return r.login_time&&(!min||new Date(r.login_time)<new Date(min))?r.login_time:min;},null);
         var firstLoginKey='att_login_'+m.id+'_'+today;
         var localFirstLogin=localStorage.getItem(firstLoginKey);
         var supaBase=closedHours+activeAccum;
@@ -3442,7 +3442,7 @@ async function _attPanelRefreshTick(){
     var logout_time=openRec?null:(recs.length?recs[recs.length-1].logout_time:null);
     var hours=closedHours+activeAccum;
     if(!logout_time&&activeSess){hours+=Math.max(0,(Date.now()-new Date(activeSess))/3600000);}
-    var firstLogin=recs.reduce(function(min,r){return(!min||new Date(r.login_time)<new Date(min))?r.login_time:min;},null);
+    var firstLogin=recs.reduce(function(min,r){return r.login_time&&(!min||new Date(r.login_time)<new Date(min))?r.login_time:min;},null);
     return{member:m,today_status:'present',login_time:firstLogin,logout_time:logout_time,today_hours:parseFloat(hours).toFixed(1)};
   });
   // Update stats counters
