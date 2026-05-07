@@ -509,27 +509,27 @@ textarea.fctl{resize:vertical;min-height:65px;}
         <div id="admin-dash-stats">
           <!-- Top stat cards -->
           <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px" id="ds-cards-row">
-            <div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;border-bottom:3px solid var(--accent)">
+            <div onclick="_dashGoTasks('all')" style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;border-bottom:3px solid var(--accent);cursor:pointer;transition:transform .15s,box-shadow .15s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 16px rgba(0,0,0,.25)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
               <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Total Tasks</div>
               <div style="font-size:28px;font-weight:800;font-family:var(--font-head);color:var(--text)" id="ds-total">0</div>
               <div style="font-size:11px;color:var(--text3);margin-top:4px">all members</div>
             </div>
-            <div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;border-bottom:3px solid var(--green)">
+            <div onclick="_dashGoTasks('done')" style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;border-bottom:3px solid var(--green);cursor:pointer;transition:transform .15s,box-shadow .15s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 16px rgba(0,0,0,.25)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
               <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Completed</div>
               <div style="font-size:28px;font-weight:800;font-family:var(--font-head);color:var(--green)" id="ds-done">0</div>
               <div style="font-size:11px;color:var(--text3);margin-top:4px" id="ds-pct">0% rate</div>
             </div>
-            <div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;border-bottom:3px solid var(--amber)">
+            <div onclick="_dashGoTasks('pending')" style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;border-bottom:3px solid var(--amber);cursor:pointer;transition:transform .15s,box-shadow .15s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 16px rgba(0,0,0,.25)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
               <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Pending</div>
               <div style="font-size:28px;font-weight:800;font-family:var(--font-head);color:var(--amber)" id="ds-pending">0</div>
               <div style="font-size:11px;color:var(--text3);margin-top:4px">in progress</div>
             </div>
-            <div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;border-bottom:3px solid var(--red)">
+            <div onclick="_dashGoTasks('overdue')" style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;border-bottom:3px solid var(--red);cursor:pointer;transition:transform .15s,box-shadow .15s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 16px rgba(0,0,0,.25)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
               <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Overdue</div>
               <div style="font-size:28px;font-weight:800;font-family:var(--font-head);color:var(--red)" id="ds-overdue">0</div>
               <div style="font-size:11px;color:var(--text3);margin-top:4px">need attention</div>
             </div>
-            <div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;border-bottom:3px solid var(--teal)">
+            <div onclick="showView('field',document.querySelector('.nitem[onclick*=\"\\\"field\\\"\"]')||document.querySelectorAll('.nitem')[2])" style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;border-bottom:3px solid var(--teal);cursor:pointer;transition:transform .15s,box-shadow .15s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 16px rgba(0,0,0,.25)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
               <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Field Jobs</div>
               <div style="font-size:28px;font-weight:800;font-family:var(--font-head);color:var(--teal)" id="ds-field">0</div>
               <div style="font-size:11px;color:var(--text3);margin-top:4px">active on-site</div>
@@ -578,11 +578,17 @@ textarea.fctl{resize:vertical;min-height:65px;}
           <!-- Bottom row: team + activity -->
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
             <div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:18px">
-              <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px">Team Progress</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                <div style="font-size:13px;font-weight:700;color:var(--text)">Team Progress</div>
+                <button class="btn btn-ghost btn-sm" onclick="showView('team',document.querySelector('.nitem[onclick*=\"\\\"team\\\"\"]'))">See all</button>
+              </div>
               <div id="dash-team" style="display:flex;flex-direction:column;gap:12px"></div>
             </div>
             <div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:18px">
-              <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px">Activity Log</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                <div style="font-size:13px;font-weight:700;color:var(--text)">Activity Log</div>
+                <button class="btn btn-ghost btn-sm" onclick="showView('activity',document.querySelector('.nitem[onclick*=\"\\\"activity\\\"\"]'))">See all</button>
+              </div>
               <div style="max-height:200px;overflow-y:auto"><div id="dash-act"></div></div>
             </div>
           </div>
@@ -4302,6 +4308,20 @@ async function deleteTask(id){
 // ═══════════════════════════════════════════
 // RENDER VIEWS — Role-based filtering
 // ═══════════════════════════════════════════
+function _dashGoTasks(filter,memberName){
+  taskFilter=filter;
+  var srch=document.getElementById('gsearch');
+  srch.value=memberName||'';
+  var tasksNav=null;
+  document.querySelectorAll('.nitem').forEach(function(n){if(!tasksNav&&(n.getAttribute('onclick')||'').includes("'tasks'"))tasksNav=n;});
+  showView('tasks',tasksNav);
+  document.querySelectorAll('.fpill').forEach(function(p){p.classList.remove('active');});
+  var pillMap={all:0,pending:1,done:2,overdue:3,escalated:4,field:5,high:6};
+  if(pillMap[filter]!==undefined){var pills=document.querySelectorAll('.fpill');if(pills[pillMap[filter]])pills[pillMap[filter]].classList.add('active');}
+  var labels={all:isAdmin()?'All Tasks':'My Tasks',pending:'Pending',done:'Completed',overdue:'Overdue',escalated:'Escalated',field:'Field Jobs',high:'High Priority',medium:'Medium Priority',low:'Low Priority'};
+  document.getElementById('tlist-title').textContent=labels[filter]||'Tasks';
+  renderTaskList();
+}
 function renderDashboard(){
   const visibleTasks = getVisibleTasks(); // role-filtered
 
@@ -4322,9 +4342,10 @@ function renderDashboard(){
     document.getElementById('ds-barchart').innerHTML=barDays.map(function(d){
       var h=Math.max(Math.round(d.count/maxB*80),d.count?4:2);
       var col=d.today?'var(--accent)':d.count?'rgba(99,102,241,0.45)':'var(--bg3)';
-      return'<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;justify-content:flex-end">'
+      var colHover=d.today?'var(--accent)':d.count?'rgba(99,102,241,0.75)':'var(--bg3)';
+      return'<div onclick="_dashGoTasks(\'all\')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;justify-content:flex-end;cursor:pointer" title="'+d.label+': '+d.count+' tasks">'
         +(d.count?'<div style="font-size:10px;color:var(--text3);font-weight:600">'+d.count+'</div>':'<div style="font-size:10px;color:transparent">0</div>')
-        +'<div style="width:100%;background:'+col+';border-radius:4px 4px 0 0;height:'+h+'px;transition:height .4s"></div>'
+        +'<div style="width:100%;background:'+col+';border-radius:4px 4px 0 0;height:'+h+'px;transition:height .4s,background .15s" onmouseover="this.style.background=\''+colHover+'\'" onmouseout="this.style.background=\''+col+'\'"></div>'
       +'</div>';
     }).join('');
     document.getElementById('ds-barchart-labels').innerHTML=barDays.map(function(d){
@@ -4342,16 +4363,16 @@ function renderDashboard(){
     document.getElementById('ds-donut').style.background=gradient;
     document.getElementById('ds-donut-num').textContent=high+med+low;
     document.getElementById('ds-priority-legend').innerHTML=
-      '<div style="display:flex;align-items:center;gap:8px"><div style="width:10px;height:10px;border-radius:3px;background:var(--red);flex-shrink:0"></div><span style="font-size:12px;color:var(--text2);flex:1">High</span><span style="font-size:12px;font-weight:700;color:var(--text)">'+high+'</span><span style="font-size:11px;color:var(--text3)">'+hPct+'%</span></div>'
-      +'<div style="display:flex;align-items:center;gap:8px"><div style="width:10px;height:10px;border-radius:3px;background:var(--amber);flex-shrink:0"></div><span style="font-size:12px;color:var(--text2);flex:1">Medium</span><span style="font-size:12px;font-weight:700;color:var(--text)">'+med+'</span><span style="font-size:11px;color:var(--text3)">'+mPct+'%</span></div>'
-      +'<div style="display:flex;align-items:center;gap:8px"><div style="width:10px;height:10px;border-radius:3px;background:#6366f1;flex-shrink:0"></div><span style="font-size:12px;color:var(--text2);flex:1">Low</span><span style="font-size:12px;font-weight:700;color:var(--text)">'+low+'</span><span style="font-size:11px;color:var(--text3)">'+lPct+'%</span></div>';
+      '<div onclick="_dashGoTasks(\'high\')" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 6px;border-radius:6px;transition:background .15s" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'"><div style="width:10px;height:10px;border-radius:3px;background:var(--red);flex-shrink:0"></div><span style="font-size:12px;color:var(--text2);flex:1">High</span><span style="font-size:12px;font-weight:700;color:var(--text)">'+high+'</span><span style="font-size:11px;color:var(--text3)">'+hPct+'%</span></div>'
+      +'<div onclick="_dashGoTasks(\'medium\')" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 6px;border-radius:6px;transition:background .15s" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'"><div style="width:10px;height:10px;border-radius:3px;background:var(--amber);flex-shrink:0"></div><span style="font-size:12px;color:var(--text2);flex:1">Medium</span><span style="font-size:12px;font-weight:700;color:var(--text)">'+med+'</span><span style="font-size:11px;color:var(--text3)">'+mPct+'%</span></div>'
+      +'<div onclick="_dashGoTasks(\'low\')" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 6px;border-radius:6px;transition:background .15s" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'"><div style="width:10px;height:10px;border-radius:3px;background:#6366f1;flex-shrink:0"></div><span style="font-size:12px;color:var(--text2);flex:1">Low</span><span style="font-size:12px;font-weight:700;color:var(--text)">'+low+'</span><span style="font-size:11px;color:var(--text3)">'+lPct+'%</span></div>';
 
     // ── Deadline tasks ──
     var deadlines=[...db.tasks].filter(function(t){return !t.done&&(isOverdue(t)||t.dueDate);}).sort(function(a,b){return new Date(a.dueDate||'9999')-new Date(b.dueDate||'9999');}).slice(0,5);
     document.getElementById('ds-deadline-list').innerHTML=deadlines.length?deadlines.map(function(t){
       var ov=isOverdue(t);var owner=getMember(t.ownerId);
       var dueStr=t.dueDate?new Date(t.dueDate).toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'No date';
-      return'<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border-radius:8px;border-left:3px solid '+(ov?'var(--red)':'var(--amber)')+'">'
+      return'<div onclick="_dashGoTasks(\''+(ov?'overdue':'pending')+'\')" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border-radius:8px;border-left:3px solid '+(ov?'var(--red)':'var(--amber)')+';cursor:pointer;transition:opacity .15s" onmouseover="this.style.opacity=\'.8\'" onmouseout="this.style.opacity=\'1\'">'
         +'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+t.title+'</div>'
         +'<div style="font-size:11px;color:var(--text3);margin-top:1px">'+owner.name+' · '+dueStr+'</div></div>'
         +'<span style="font-size:10px;font-weight:700;color:'+(ov?'var(--red)':'var(--amber)')+';white-space:nowrap">'+(ov?'Overdue':'Due soon')+'</span>'
@@ -4361,7 +4382,7 @@ function renderDashboard(){
     // ── Team progress ──
     document.getElementById('dash-team').innerHTML=db.members.map(m=>{
       const mt=db.tasks.filter(t=>t.ownerId===m.id),md=mt.filter(t=>t.done).length,pct=mt.length?Math.round(md/mt.length*100):0;
-      return`<div><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+      return`<div onclick="_dashGoTasks('all','${m.name.replace(/'/g,"\\\'")}')" style="cursor:pointer;padding:4px 6px;border-radius:8px;margin:-4px -6px;transition:background .15s" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''"><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
         <div class="oavatar" style="background:${m.color};width:22px;height:22px;font-size:10px">${initials(m.name)}</div>
         <span style="font-size:13px;color:var(--text2);flex:1">${m.name}</span>
         <div class="presence-dot ${isOnline(m.id)?'online':'offline'}" style="margin-right:4px"></div>
@@ -4370,7 +4391,7 @@ function renderDashboard(){
       </div><div class="prog-wrap"><div class="prog-bar" style="width:${pct}%;background:${m.color}"></div></div></div>`;
     }).join('')||'<div style="color:var(--text3);font-size:13px">No members yet</div>';
     const acts=db.activity.slice(0,8);
-    document.getElementById('dash-act').innerHTML=acts.map(a=>`<div class="act-item"><div class="act-dot" style="background:${a.type==='success'?'var(--green)':a.type==='warning'?'var(--amber)':'var(--accent)'}"></div><div><div class="act-text">${a.msg}</div><div class="act-time">${fmtAgo(a.time)}</div></div></div>`).join('')||'<div style="color:var(--text3);font-size:13px">No activity yet</div>';
+    document.getElementById('dash-act').innerHTML=acts.map(a=>`<div class="act-item" style="cursor:default"><div class="act-dot" style="background:${a.type==='success'?'var(--green)':a.type==='warning'?'var(--amber)':'var(--accent)'}"></div><div><div class="act-text">${a.msg}</div><div class="act-time">${fmtAgo(a.time)}</div></div></div>`).join('')||'<div style="color:var(--text3);font-size:13px">No activity yet</div>';
   } else {
     // EMPLOYEE: show only tasks assigned to this user
     const total=visibleTasks.length,done=visibleTasks.filter(t=>t.done).length;
@@ -4396,6 +4417,8 @@ function renderTaskList(){
   if(taskFilter==='escalated')tasks=tasks.filter(t=>t.escalated);
   if(taskFilter==='field')tasks=tasks.filter(t=>t.isField);
   if(taskFilter==='high')tasks=tasks.filter(t=>t.priority==='high');
+  if(taskFilter==='medium')tasks=tasks.filter(t=>t.priority==='medium');
+  if(taskFilter==='low')tasks=tasks.filter(t=>t.priority==='low');
   tasks.sort((a,b)=>{if(a.done!==b.done)return a.done?1:-1;const p={high:0,medium:1,low:2};if(p[a.priority]!==p[b.priority])return p[a.priority]-p[b.priority];return new Date(a.dueDate||'9999')-new Date(b.dueDate||'9999');});
   document.getElementById('tcount').textContent=tasks.length+' task'+(tasks.length!==1?'s':'');
   if(!tasks.length){document.getElementById('main-tlist').innerHTML='<div style="color:var(--text3);text-align:center;padding:2rem;font-size:14px">No tasks found</div>';return;}
